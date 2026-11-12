@@ -136,8 +136,7 @@ class SpellsColumn extends StatelessWidget {
   }
 
   List<Widget> _group(BuildContext context, int level) {
-    final spells = character.spells.where((s) => s.level == level).toList()
-      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    final spells = character.spells.where((s) => s.level == level).toList();
     if (spells.isEmpty) return [];
     return [
       Padding(
@@ -147,12 +146,27 @@ class SpellsColumn extends StatelessWidget {
                 fontWeight: FontWeight.bold,
                 color: Theme.of(context).colorScheme.primary)),
       ),
-      for (final s in spells)
-        ListTile(
+      ReorderList(
+        items: spells,
+        idOf: (s) => s.id,
+        onReorder: (o, n) => ctrl.mutate((x) {
+          final moved = spells[o];
+          x.spells.remove(moved);
+          final rest = x.spells.where((s) => s.level == level).toList();
+          if (n < rest.length) {
+            x.spells.insert(x.spells.indexOf(rest[n]), moved);
+          } else if (rest.isNotEmpty) {
+            x.spells.insert(x.spells.indexOf(rest.last) + 1, moved);
+          } else {
+            x.spells.add(moved);
+          }
+        }),
+        itemBuilder: (s) => ListTile(
           dense: true,
           title: Text(s.name),
           onTap: () => showSpellModal(context, ctrl, spell: s),
         ),
+      ),
     ];
   }
 }

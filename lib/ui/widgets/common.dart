@@ -38,6 +38,47 @@ class SectionCard extends StatelessWidget {
   }
 }
 
+/// Drag-to-reorder list for the short lists inside a [SectionCard].
+class ReorderList<T> extends StatelessWidget {
+  const ReorderList({
+    super.key,
+    required this.items,
+    required this.idOf,
+    required this.itemBuilder,
+    required this.onReorder,
+  });
+
+  final List<T> items;
+  final String Function(T) idOf;
+  final Widget Function(T) itemBuilder;
+
+  /// Called with already-adjusted (oldIndex, newIndex) positions.
+  final void Function(int oldIndex, int newIndex) onReorder;
+
+  @override
+  Widget build(BuildContext context) {
+    return ReorderableListView(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      buildDefaultDragHandles: true,
+      onReorder: (oldIndex, newIndex) {
+        if (newIndex > oldIndex) newIndex -= 1;
+        if (oldIndex == newIndex) return;
+        onReorder(oldIndex, newIndex);
+      },
+      children: [
+        for (final item in items)
+          Padding(
+            key: ValueKey(idOf(item)),
+            // Reserve room for the drag handle drawn at the right edge.
+            padding: const EdgeInsets.only(right: 40),
+            child: itemBuilder(item),
+          ),
+      ],
+    );
+  }
+}
+
 /// Integer input that reports valid values as the user types.
 class IntField extends StatefulWidget {
   const IntField({

@@ -48,21 +48,24 @@ class InventoryColumn extends StatelessWidget {
               label: const Text('Add Weapon')),
           child: c.weapons.isEmpty
               ? const Text('No weapons yet.')
-              : Column(children: [
-                  for (final w in c.weapons)
-                    ListTile(
-                      dense: true,
-                      title: Text(w.name),
-                      subtitle: (w.attackBonus.isEmpty && w.damage.isEmpty)
-                          ? null
-                          : Text([
-                              if (w.attackBonus.isNotEmpty)
-                                '${w.attackBonus} to hit',
-                              if (w.damage.isNotEmpty) w.damage,
-                            ].join(' · ')),
-                      onTap: () => showWeaponModal(context, ctrl, weapon: w),
-                    ),
-                ]),
+              : ReorderList(
+                  items: c.weapons,
+                  idOf: (w) => w.id,
+                  onReorder: (o, n) => ctrl.mutate(
+                      (x) => x.weapons.insert(n, x.weapons.removeAt(o))),
+                  itemBuilder: (w) => ListTile(
+                    dense: true,
+                    title: Text(w.name),
+                    subtitle: (w.attackBonus.isEmpty && w.damage.isEmpty)
+                        ? null
+                        : Text([
+                            if (w.attackBonus.isNotEmpty)
+                              '${w.attackBonus} to hit',
+                            if (w.damage.isNotEmpty) w.damage,
+                          ].join(' · ')),
+                    onTap: () => showWeaponModal(context, ctrl, weapon: w),
+                  ),
+                ),
         ),
         SectionCard(
           title: 'Items',
@@ -72,15 +75,18 @@ class InventoryColumn extends StatelessWidget {
               label: const Text('Add Item')),
           child: c.items.isEmpty
               ? const Text('No items yet.')
-              : Column(children: [
-                  for (final item in c.items)
-                    ListTile(
-                      dense: true,
-                      title: Text(item.name),
-                      trailing: Text('x${item.amount}'),
-                      onTap: () => showItemModal(context, ctrl, item: item),
-                    ),
-                ]),
+              : ReorderList(
+                  items: c.items,
+                  idOf: (i) => i.id,
+                  onReorder: (o, n) => ctrl
+                      .mutate((x) => x.items.insert(n, x.items.removeAt(o))),
+                  itemBuilder: (item) => ListTile(
+                    dense: true,
+                    title: Text(item.name),
+                    trailing: Text('x${item.amount}'),
+                    onTap: () => showItemModal(context, ctrl, item: item),
+                  ),
+                ),
         ),
         SectionCard(
           title: 'Proficiencies',
@@ -91,15 +97,18 @@ class InventoryColumn extends StatelessWidget {
               label: const Text('Add Proficiency')),
           child: c.proficiencies.isEmpty
               ? const Text('No proficiencies yet.')
-              : Column(children: [
-                  for (final p in c.proficiencies)
-                    ListTile(
-                      dense: true,
-                      title: Text(p.name),
-                      onTap: () => showNoteModal(context, ctrl,
-                          note: p, proficiency: true),
-                    ),
-                ]),
+              : ReorderList(
+                  items: c.proficiencies,
+                  idOf: (p) => p.id,
+                  onReorder: (o, n) => ctrl.mutate((x) =>
+                      x.proficiencies.insert(n, x.proficiencies.removeAt(o))),
+                  itemBuilder: (p) => ListTile(
+                    dense: true,
+                    title: Text(p.name),
+                    onTap: () => showNoteModal(context, ctrl,
+                        note: p, proficiency: true),
+                  ),
+                ),
         ),
         SectionCard(
           title: 'Features & Notes',
@@ -109,14 +118,17 @@ class InventoryColumn extends StatelessWidget {
               label: const Text('Add Note')),
           child: c.featuresAndNotes.isEmpty
               ? const Text('No features or notes yet.')
-              : Column(children: [
-                  for (final n in c.featuresAndNotes)
-                    ListTile(
-                      dense: true,
-                      title: Text(n.name),
-                      onTap: () => showNoteModal(context, ctrl, note: n),
-                    ),
-                ]),
+              : ReorderList(
+                  items: c.featuresAndNotes,
+                  idOf: (n) => n.id,
+                  onReorder: (o, n) => ctrl.mutate((x) => x.featuresAndNotes
+                      .insert(n, x.featuresAndNotes.removeAt(o))),
+                  itemBuilder: (n) => ListTile(
+                    dense: true,
+                    title: Text(n.name),
+                    onTap: () => showNoteModal(context, ctrl, note: n),
+                  ),
+                ),
         ),
       ],
     );
