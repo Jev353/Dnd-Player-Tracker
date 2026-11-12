@@ -53,3 +53,5 @@ installer_output/
 innosetup-*.exe
 
 *.json
+supabase_config.json
+!supabase_config.example.json

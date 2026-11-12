@@ -5,15 +5,30 @@ import 'package:flutter/foundation.dart';
 import '../constants/dnd_constants.dart';
 import '../models/character.dart';
 import '../services/storage_service.dart';
+import '../services/sync_service.dart';
 
 enum SaveStatus { saved, saving, error }
 
 /// Holds all characters and the single active one; debounced auto-save.
 class CharacterController extends ChangeNotifier {
-  CharacterController(this._storage,
-      {this.saveDelay = const Duration(milliseconds: 300)});
+  CharacterController(
+    this._storage, {
+    this.saveDelay = const Duration(milliseconds: 300),
+    this.syncDelay = const Duration(milliseconds: 500),
+    SyncService? syncService,
+  }) : _syncService = syncService ?? SyncService();
 
   final StorageService _storage;
+  final SyncService _syncService;
+  final Duration syncDelay;
+  Timer? _syncDebounce;
+
+  String? currentRoomCode;
+  List<Character> partyMembers = [];
+  Character? inspectedPartyMember;
+  String? syncError;
+  bool get isViewingPartyMember => inspectedPartyMember != null;
+
   final Duration saveDelay;
 
   final List<Character> _characters = [];
@@ -54,12 +69,75 @@ class CharacterController extends ChangeNotifier {
   /// Call after any mutation to the active character.
   void mutate([void Function(Character c)? change]) {
     final c = _active;
-    if (c == null) return;
+    if (c == null || isViewingPartyMember) return;
     change?.call(c);
+    _scheduleSync(c);
     _status = SaveStatus.saving;
     notifyListeners();
     _debounce?.cancel();
     _debounce = Timer(saveDelay, () => _persist(c));
+  }
+
+  void _scheduleSync(Character c) {
+    if (currentRoomCode == null) return;
+    _syncDebounce?.cancel();
+    _syncDebounce = Timer(syncDelay, () => _push(c));
+  }
+
+  Future<void> _push(Character c) async {
+    final room = currentRoomCode;
+    if (room == null) return;
+    try {
+      await _syncService.pushCharacter(roomCode: room, character: c);
+      syncError = null;
+    } catch (e) {
+      syncError = e.toString();
+      notifyListeners();
+    }
+  }
+
+  Future<void> joinRoom(String roomCode) async {
+    final room = SyncService.normalizeRoom(roomCode);
+    currentRoomCode = room;
+    partyMembers = [];
+    inspectedPartyMember = null;
+    syncError = null;
+    notifyListeners();
+    final c = _active;
+    if (c != null) await _push(c);
+    _syncService.listenToParty(
+      roomCode: room,
+      onPartyUpdated: (members) {
+        if (currentRoomCode != room) return;
+        partyMembers = members;
+        final inspected = inspectedPartyMember;
+        if (inspected != null) {
+          final fresh = members.where((m) => m.id == inspected.id);
+          if (fresh.isNotEmpty) inspectedPartyMember = fresh.first;
+        }
+        notifyListeners();
+      },
+      onError: (e) {
+        syncError = e.toString();
+        notifyListeners();
+      },
+    );
+  }
+
+  void leaveRoom() {
+    _syncService.disconnect();
+    _syncDebounce?.cancel();
+    currentRoomCode = null;
+    partyMembers = [];
+    inspectedPartyMember = null;
+    notifyListeners();
+  }
+
+  void inspectPartyMember(Character? member) {
+    inspectedPartyMember = (member == null || member.id == _active?.id)
+        ? null
+        : member;
+    notifyListeners();
   }
 
   Future<void> _persist(Character c) async {
@@ -82,8 +160,9 @@ class CharacterController extends ChangeNotifier {
     }
   }
 
-  void _sortCharacters() => _characters
-      .sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+  void _sortCharacters() => _characters.sort(
+    (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+  );
 
   Future<void> createCharacter() async {
     await flush();
@@ -123,7 +202,10 @@ class CharacterController extends ChangeNotifier {
 
   Future<void> importCharacter(String path) async {
     await flush();
-    final c = await _storage.importFrom(path, _characters.map((e) => e.id).toSet());
+    final c = await _storage.importFrom(
+      path,
+      _characters.map((e) => e.id).toSet(),
+    );
     _characters.add(c);
     _sortCharacters();
     _active = c;
@@ -141,6 +223,8 @@ class CharacterController extends ChangeNotifier {
   @override
   void dispose() {
     _debounce?.cancel();
+    _syncDebounce?.cancel();
+    _syncService.disconnect();
     super.dispose();
   }
 }

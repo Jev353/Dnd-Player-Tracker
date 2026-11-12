@@ -11,7 +11,12 @@ if (-not $line) { throw 'Could not find version: in pubspec.yaml' }
 $version = ($line.Matches[0].Groups[1].Value -split '\+')[0]
 Write-Host "Building version $version"
 
-flutter build windows --release
+$buildArgs = @('build', 'windows', '--release')
+if (Test-Path -LiteralPath 'supabase_config.json') {
+    $buildArgs += '--dart-define-from-file=supabase_config.json'
+    Write-Host 'Including Supabase config for cloud sync'
+}
+flutter @buildArgs
 if ($LASTEXITCODE -ne 0) { throw 'flutter build failed' }
 
 # Locate the Inno Setup compiler.
@@ -35,3 +40,4 @@ if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compile failed' }
 Write-Host ''
 Write-Host "Done. Send this file to your friend:"
 Write-Host "  $PSScriptRoot\installer_output\DnDTracker_Setup_$version.exe"
+
