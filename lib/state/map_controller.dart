@@ -304,6 +304,27 @@ class MapController extends ChangeNotifier {
     _schedulePush();
   }
 
+  /// Moves a token by ([dx], [dy]) from its CURRENT position. Use this while
+  /// dragging: several pointer events can arrive between widget rebuilds, so
+  /// adding to a stale position would drop movement.
+  void moveTokenBy(
+    String tokenId,
+    double dx,
+    double dy, {
+    required String? currentCharacterId,
+  }) {
+    final scene = activeScene;
+    if (scene == null) return;
+    final token = _findToken(scene, tokenId);
+    if (token == null) return;
+    moveToken(
+      tokenId,
+      token.x + dx,
+      token.y + dy,
+      currentCharacterId: currentCharacterId,
+    );
+  }
+
   /// Snaps the token to the nearest grid intersection when the active
   /// scene has its grid enabled. No-op otherwise. Call before [endTokenDrag]
   /// so the snapped position is what gets pushed.

@@ -88,10 +88,10 @@ class _MapCanvasState extends State<MapCanvas> {
   void _drag(MapToken token, Offset delta) {
     // The delta is reported in the token's local (scene) coordinates, which
     // already account for the InteractiveViewer's zoom; do not rescale it.
-    widget.mapController.moveToken(
+    widget.mapController.moveTokenBy(
       token.id,
-      token.x + delta.dx,
-      token.y + delta.dy,
+      delta.dx,
+      delta.dy,
       currentCharacterId: widget.currentCharacterId,
     );
   }
