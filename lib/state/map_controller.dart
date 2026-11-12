@@ -114,6 +114,8 @@ class MapController extends ChangeNotifier {
         gmId = clientId;
         syncError = null;
         _restoreGmView();
+        notifyListeners();
+        await uploadLocalImages();
       } else {
         isGM = false;
         // Refreshed from the stream shortly; mark taken in the meantime.
@@ -317,6 +319,53 @@ class MapController extends ChangeNotifier {
       notifyListeners();
       return url;
     }
+  }
+
+  bool _isLocalPath(String url) {
+    final u = url.trim();
+    return u.isNotEmpty &&
+        !u.startsWith('http://') &&
+        !u.startsWith('https://');
+  }
+
+  /// GM only: uploads every scene/layer image that is still a local file
+  /// path (e.g. maps prepared before joining a party) to Supabase Storage
+  /// and swaps in the public URL so players can see them. Images that fail
+  /// to upload are left as they are. Returns how many were uploaded.
+  Future<int> uploadLocalImages() async {
+    if (!isGM || !isSynced) return 0;
+    var uploaded = 0;
+    for (final scene in List<MapScene>.of(_scenes)) {
+      var imageUrl = scene.imageUrl;
+      if (_isLocalPath(imageUrl)) {
+        final url = await resolveImageUrl(imageUrl);
+        if (!_isLocalPath(url)) {
+          imageUrl = url;
+          uploaded++;
+        }
+      }
+      final layers = <MapLayer>[];
+      for (final layer in scene.layers) {
+        var layerUrl = layer.imageUrl;
+        if (_isLocalPath(layerUrl)) {
+          final url = await resolveImageUrl(layerUrl);
+          if (!_isLocalPath(url)) {
+            layerUrl = url;
+            uploaded++;
+          }
+        }
+        layers.add(layer.copyWith(imageUrl: layerUrl));
+      }
+      // Re-read: the scene may have changed while uploading.
+      final i = _scenes.indexWhere((s) => s.id == scene.id);
+      if (i < 0) continue;
+      _scenes[i] = _scenes[i].copyWith(imageUrl: imageUrl, layers: layers);
+    }
+    if (uploaded > 0) {
+      notifyListeners();
+      await _pushNow();
+    }
+    return uploaded;
   }
 
   @override
