@@ -101,22 +101,28 @@ class MapController extends ChangeNotifier {
     final code = partyCode;
     if (code == null || !isSynced) {
       isGM = true;
+      _restoreGmView();
       notifyListeners();
       return true;
     }
+    // Optimistic: claiming writes a row that echoes back through the stream,
+    // and that echo must already be treated as coming from the GM.
+    isGM = true;
     try {
       final ok = await _sync.claimGm(code, clientId);
       if (ok) {
         gmId = clientId;
-        isGM = true;
         syncError = null;
+        _restoreGmView();
       } else {
+        isGM = false;
         // Refreshed from the stream shortly; mark taken in the meantime.
         gmId ??= '?';
       }
       notifyListeners();
       return ok;
     } catch (e) {
+      isGM = false;
       debugPrint('claimGm failed: $e');
       final missingColumn =
           e is PostgrestException &&
@@ -128,6 +134,16 @@ class MapController extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+  }
+
+  /// A GM with no viewed scene would see an empty map even though scenes
+  /// exist (e.g. after releasing and re-claiming), so fall back to the
+  /// party scene, then the first scene.
+  void _restoreGmView() {
+    if (_sceneById(viewedSceneId) != null) return;
+    viewedSceneId =
+        partyScene?.id ?? (_scenes.isEmpty ? null : _scenes.first.id);
+    viewedLayerId = null;
   }
 
   /// Gives up the GM seat so another player can take it.
@@ -197,9 +213,11 @@ class MapController extends ChangeNotifier {
       viewedSceneId = null;
       viewedLayerId = null;
     }
-    // Claiming GM creates an empty row; keep the GM's local scenes then.
+    // Claiming GM creates an empty row. A GM never deletes every scene, so an
+    // empty remote list means "not uploaded yet": keep ours and upload it
+    // instead of wiping the GM's maps.
     final remoteScenes = readList(row['scenes']);
-    if (first && isGM && remoteScenes.isEmpty && _scenes.isNotEmpty) {
+    if (isGM && remoteScenes.isEmpty && _scenes.isNotEmpty) {
       notifyListeners();
       _pushNow();
       return;
