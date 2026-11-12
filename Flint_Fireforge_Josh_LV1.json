@@ -1,0 +1,284 @@
+{
+  "id": "1794001517096951-0",
+  "name": "Flint Fireforge",
+  "characterClass": "Artificer",
+  "bio": "Dwarf\n\nArtisan (Smith)",
+  "level": 1,
+  "proficiencyBonus": 2,
+  "armorClass": 13,
+  "initiative": 0,
+  "speed": 30,
+  "hp": {
+    "current": 11,
+    "max": 11,
+    "temp": 0
+  },
+  "hitDice": {
+    "total": "1d8",
+    "remaining": 1
+  },
+  "deathSaves": {
+    "successes": 0,
+    "failures": 0
+  },
+  "spellcastingAbility": "INT",
+  "abilities": {
+    "STR": 8,
+    "DEX": 16,
+    "CON": 14,
+    "INT": 16,
+    "WIS": 12,
+    "CHA": 8
+  },
+  "savingThrowProficiencies": {
+    "STR": false,
+    "DEX": false,
+    "CON": true,
+    "INT": true,
+    "WIS": false,
+    "CHA": false
+  },
+  "skillProficiencies": {
+    "Acrobatics": false,
+    "Animal Handling": false,
+    "Arcana": true,
+    "Athletics": false,
+    "Deception": false,
+    "History": false,
+    "Insight": false,
+    "Intimidation": false,
+    "Investigation": true,
+    "Medicine": false,
+    "Nature": false,
+    "Perception": false,
+    "Performance": false,
+    "Persuasion": true,
+    "Religion": false,
+    "Sleight of Hand": false,
+    "Stealth": false,
+    "Survival": true
+  },
+  "currency": {
+    "cp": 0,
+    "sp": 0,
+    "ep": 0,
+    "gp": 48,
+    "pp": 0
+  },
+  "weapons": [
+    {
+      "id": "1794003813170081-13",
+      "name": "Dagger",
+      "attackBonus": "Prof.(2) + Dex(3)",
+      "damage": "1d4 + Dex(3)",
+      "damageType": "Piercing",
+      "range": "5ft",
+      "properties": "Finesse, Light",
+      "description": ""
+    }
+  ],
+  "items": [
+    {
+      "id": "1794003897447631-15",
+      "name": "Studded Leather Armor",
+      "amount": 1,
+      "description": "Armor Class: 12 + Dex modifier"
+    },
+    {
+      "id": "1794003924204642-17",
+      "name": "Tinkers Tools",
+      "amount": 1,
+      "description": "Ability: Dexterity\r\nUtilize: Assemble a Tiny item composed of scrap, which falls apart in 1 minute (DC 20)\r\nCraft: Musket, Pistol, Bell, Bullseye Lantern, Flask, Hooded Lantern, Hunting Trap, Lock, Manacles, Mirror, Shovel, Signal Whistle, Tinderbox"
+    },
+    {
+      "id": "1794004046350900-18",
+      "name": "Dungeoneer's Pack",
+      "amount": 1,
+      "description": "Backpack\nCaltrops\nCrowbar\n2 flasks of Oil\nRope\nTinderbox\n10 Torches\nWaterskin"
+    },
+    {
+      "id": "1794449246902468-43",
+      "name": "WoodCarver Tools",
+      "amount": 1,
+      "description": "Ability: Dexterity\r\nUtilize: Carve a pattern in wood (DC 10)\r\nCraft: Club, Greatclub, Quarterstaff, Ranged weapons (except Pistol, Musket, and Sling), Arcane Focus, Arrows, Bolts, Druidic Focus, Ink Pen, Needles"
+    },
+    {
+      "id": "1794449261106470-44",
+      "name": "Smiths Tools",
+      "amount": 1,
+      "description": "Ability: Strength\r\nUtilize: Pry open a door or container (DC 20)\r\nCraft: Any Melee weapon (except Club, Greatclub, Quarterstaff, and Whip), Medium armor (except Hide), Heavy armor, Ball Bearings, Bucket, Caltrops, Chain, Crowbar, Firearm Bullets, Grappling Hook, Iron Pot, Iron Spikes, Sling Bullets"
+    },
+    {
+      "id": "1794449318514980-45",
+      "name": "Thieves Tools",
+      "amount": 1,
+      "description": "This set of tools includes a small file, a set of lock picks, a small mirror mounted on a metal handle, a set of narrow-bladed scissors, and a pair of pliers. Proficiency with these tools lets you add your proficiency bonus to any ability checks you make to disarm traps or open locks."
+    },
+    {
+      "id": "1794449826584938-46",
+      "name": "Pouch",
+      "amount": 2,
+      "description": ""
+    },
+    {
+      "id": "1794451120280185-50",
+      "name": "Rations",
+      "amount": 10,
+      "description": ""
+    }
+  ],
+  "featuresAndNotes": [
+    {
+      "id": "1794004481995339-21",
+      "name": "Timker's Magic",
+      "description": "Make one of these , they last until a long rest.  Use this feature a number of times equal to int modifier per long rest:\n\nBall Bearings\nBasket\nBedroll\nBell\nBlanket\nBlock and Tackle\nBottle/Glass\nBucket\nCaltrops\nCandle\nCrowbar\nFlask\nGrappling Hook\nHunting Trap\nJug\nLamp\nManacles\nNet\nOil\nPaper\nParchment\nPole\nPouch\nRope\nSack\nShovel\nSpikes, Iron\nString\nTinderbox\nTorch\nVial"
+    },
+    {
+      "id": "1794449934873850-47",
+      "name": "Darkvision",
+      "description": "120 Feet"
+    },
+    {
+      "id": "1794449963422957-48",
+      "name": "Dwarven Toughness",
+      "description": "Hit Point +1 each level"
+    },
+    {
+      "id": "1794450220548240-49",
+      "name": "Stonecunning",
+      "description": "As a Bonus Action, you gain Tremorsense with a range of 60 feet for 10 mins.  Must be on a stone surface or souching a stone.  You can do this a number of times equal to proficiency bonus. \n\n• Shared Surface Requirement: Both the creature with tremorsense and the target must be in contact with the same ground, floor, wall, ceiling, or liquid.\n• Pinpointing Location: It automatically reveals the exact position of anything moving or standing on that surface within a specified range (such as 60 feet)"
+    }
+  ],
+  "proficiencies": [
+    {
+      "id": "1794003475038144-7",
+      "name": "Thieves tools",
+      "description": "• A small file\n• A set of lock picks\n• A small mirror mounted on a metal handle\n• A set of narrow-bladed scissors\n• A pair of pliers"
+    },
+    {
+      "id": "1794003488151835-8",
+      "name": "Tinker Tools",
+      "description": ""
+    },
+    {
+      "id": "1794003499089722-9",
+      "name": "Simple weapons",
+      "description": ""
+    },
+    {
+      "id": "1794003523138775-10",
+      "name": "Light and Med armor",
+      "description": ""
+    },
+    {
+      "id": "1794003528166474-11",
+      "name": "Shields",
+      "description": ""
+    },
+    {
+      "id": "1794449080941777-41",
+      "name": "Smiths Tools",
+      "description": ""
+    },
+    {
+      "id": "1794449218203355-42",
+      "name": "Woodcarver's Tools",
+      "description": ""
+    }
+  ],
+  "spellSlots": {
+    "1": {
+      "remaining": 2,
+      "max": 2
+    },
+    "2": {
+      "remaining": 0,
+      "max": 0
+    },
+    "3": {
+      "remaining": 0,
+      "max": 0
+    },
+    "4": {
+      "remaining": 0,
+      "max": 0
+    },
+    "5": {
+      "remaining": 0,
+      "max": 0
+    },
+    "6": {
+      "remaining": 0,
+      "max": 0
+    },
+    "7": {
+      "remaining": 0,
+      "max": 0
+    },
+    "8": {
+      "remaining": 0,
+      "max": 0
+    },
+    "9": {
+      "remaining": 0,
+      "max": 0
+    }
+  },
+  "spells": [
+    {
+      "id": "1794002100076364-3",
+      "name": "Magic Stone",
+      "level": 0,
+      "castingTime": "1 Bonus action",
+      "range": "60ft ",
+      "duration": "1 min",
+      "components": "V, S",
+      "damage": "1d6 bludgeoning + your spellcasting ability",
+      "description": "You touch one to three pebbles and imbue them with magic. You or someone else can make a ranged spell attack with one of the pebbles by throwing it or hurling it with a sling. If thrown, it has a range of 60 feet. If someone else attacks with the pebble, that attacker adds your spellcasting ability modifier, not the attacker’s, to the attack roll. On a hit, the target takes bludgeoning damage equal to 1d6 + your spellcasting ability modifier. Hit or miss, the spell then ends on the stone.\r\n\r\nIf you cast this spell again, the spell ends early on any pebbles still affected by it."
+    },
+    {
+      "id": "1794002559025725-7",
+      "name": "Green-Flame Blade",
+      "level": 0,
+      "castingTime": "1 action",
+      "range": "Self",
+      "duration": "Instant",
+      "components": "S, M",
+      "damage": "spellcasting ability mod",
+      "description": "You brandish the weapon used in the spell’s casting and make a melee attack with it against one creature within 5 feet of you. On a hit, the target suffers the weapon attack’s normal effects, and you can cause green fire to leap from the target to a different creature of your choice that you can see within 5 feet of it. The second creature takes fire damage equal to your spellcasting ability modifier."
+    },
+    {
+      "id": "1794004303645893-20",
+      "name": "Mending",
+      "level": 0,
+      "castingTime": "1 min",
+      "range": "Touch",
+      "duration": "Instant",
+      "components": "V, S, M (two lodestones)",
+      "damage": "",
+      "description": "This spell repairs a single break or tear in an object you touch, such as a broken chain link, two halves of a broken key, a torn cloak, or a leaking wineskin. As long as the break or tear is no larger than 1 foot in any dimension, you mend it, leaving no trace of the former damage.\r\n\r\nThis spell can physically repair a magic item or construct, but the spell can’t restore magic to such an object."
+    },
+    {
+      "id": "1794006437172799-39",
+      "name": "Catapult",
+      "level": 1,
+      "castingTime": "1 action",
+      "range": "60 ft",
+      "duration": "Instant",
+      "components": "S",
+      "damage": "3d8 bludgeoning",
+      "description": "Choose one object weighing 1 to 5 pounds within range that isn’t being worn or carried. The object flies in a straight line up to 90 feet in a direction you choose before falling to the ground, stopping early if it impacts against a solid surface. If the object would strike a creature, that creature must make a Dexterity saving throw. On a failed save, the object strikes the target and stops moving. When the object strikes something, the object and what it strikes each take 3d8 bludgeoning damage.\r\n\r\nAt Higher Levels. When you cast this spell using a spell slot of 2nd level or higher, the maximum weight of objects that you can target with this spell increases by 5 pounds, and the damage increases by 1d8, for each slot level above 1st."
+    },
+    {
+      "id": "1794006502517925-41",
+      "name": "Detect Magic",
+      "level": 1,
+      "castingTime": "1 action",
+      "range": "30 ft",
+      "duration": "10 mins Concentration",
+      "components": "V, S",
+      "damage": "",
+      "description": "For the duration, you sense the presence of magic within 30 feet of you. If you sense magic in this way, you can use your action to see a faint aura around any visible creature or object in the area that bears magic, and you learn its school of magic, if any.\r\n\r\nThe spell can penetrate most barriers, but is blocked by 1 foot of stone, 1 inch of common metal, a thin sheet of lead, or 3 feet of wood or dirt."
+    }
+  ]
+}
