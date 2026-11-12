@@ -4,11 +4,14 @@ import 'package:flutter/material.dart';
 import '../../main.dart' show isCloudSyncConfigured;
 import '../../models/character.dart';
 import '../../state/character_controller.dart';
+import '../../state/map_controller.dart';
+import '../modals/map_modal.dart';
 
 class TopActionBar extends StatelessWidget {
-  const TopActionBar({super.key, required this.ctrl});
+  const TopActionBar({super.key, required this.ctrl, this.mapController});
 
   final CharacterController ctrl;
+  final MapController? mapController;
 
   Future<bool> _confirm(BuildContext context, String title, String body) async {
     final ok = await showDialog<bool>(
@@ -191,6 +194,16 @@ class TopActionBar extends StatelessWidget {
                     ),
                     label: Text(room == null ? 'Join Party' : 'Room: '),
                   ),
+                  if (mapController != null)
+                    OutlinedButton.icon(
+                      onPressed: () => showMapModal(
+                        context,
+                        mapController: mapController!,
+                        characterController: ctrl,
+                      ),
+                      icon: const Icon(Icons.map),
+                      label: const Text('Party Map'),
+                    ),
                   OutlinedButton.icon(
                     onPressed: () async {
                       if (await _confirm(

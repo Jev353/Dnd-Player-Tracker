@@ -1,16 +1,35 @@
 import 'package:flutter/material.dart';
 
 import '../state/character_controller.dart';
+import '../state/map_controller.dart';
 import 'widgets/inventory_column.dart';
 import 'widgets/spells_column.dart';
 import 'widgets/stats_column.dart';
 import 'widgets/top_action_bar.dart';
 
 /// Top bar plus a 40/30/30 three-column body for the single active character.
-class DashboardScreen extends StatelessWidget {
-  const DashboardScreen({super.key, required this.ctrl});
+class DashboardScreen extends StatefulWidget {
+  const DashboardScreen({super.key, required this.ctrl, this.mapController});
 
   final CharacterController ctrl;
+
+  /// Optional injection for tests; a private one is created otherwise.
+  final MapController? mapController;
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  late final MapController _map = widget.mapController ?? MapController();
+
+  CharacterController get ctrl => widget.ctrl;
+
+  @override
+  void dispose() {
+    if (widget.mapController == null) _map.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +41,11 @@ class DashboardScreen extends StatelessWidget {
         return Scaffold(
           body: Column(
             children: [
-              TopActionBar(key: const ValueKey('top-action-bar'), ctrl: ctrl),
+              TopActionBar(
+                key: const ValueKey('top-action-bar'),
+                ctrl: ctrl,
+                mapController: _map,
+              ),
               PartyBar(key: const ValueKey('party-bar'), ctrl: ctrl),
               if (viewing)
                 Material(

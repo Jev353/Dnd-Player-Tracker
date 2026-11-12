@@ -21,7 +21,7 @@ flutter test
 1. Install [Inno Setup 6](https://jrsoftware.org/isdl.php) (one time).
 2. Bump `version:` in `pubspec.yaml`.
 3. `flutter build windows --release --dart-define-from-file=supabase_config.json`
-4. Run `powershell -ExecutionPolicy Bypass -File .\build_release.ps1 `.
+4. Run `powershell -ExecutionPolicy Bypass -File .\build_release.ps1`.
 5. Send `installer_output\DnDTracker_Setup_<version>.exe` to your friend.
 
 Updates install over the old version, and saved characters are never touched. Don't change the `AppId` in `installer.iss`.
