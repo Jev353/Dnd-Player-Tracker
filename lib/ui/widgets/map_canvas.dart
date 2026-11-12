@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../models/map_scene.dart';
 import '../../models/map_token.dart';
 import '../../state/map_controller.dart';
+import 'fog_of_war_painter.dart';
 import 'grid_painter.dart';
 
 /// Parses '#RRGGBB' (or 'RRGGBB'); falls back to the theme gold.
@@ -31,7 +32,11 @@ class MapCanvas extends StatefulWidget {
     required this.mapController,
     required this.currentCharacterId,
     this.onTokenMenu,
+    this.revealMode = false,
   });
+
+  /// GM "Reveal Area" brush: dragging on the map clears fog.
+  final bool revealMode;
 
   final MapScene scene;
   final MapController mapController;
@@ -94,6 +99,29 @@ class _MapCanvasState extends State<MapCanvas> {
       delta.dy,
       currentCharacterId: widget.currentCharacterId,
     );
+  }
+
+  /// True when [token] sits under fog (its center is outside every revealed
+  /// area). Players must get no tooltip or hit-testing for such tokens.
+  /// A player's own token is never treated as fogged.
+  bool _isFogged(MapScene scene, MapToken token) {
+    if (!scene.fogEnabled) return false;
+    final own =
+        token.characterId != null &&
+        token.characterId == widget.currentCharacterId;
+    if (own) return false;
+    final half = scene.gridSize * token.size / 2;
+    final center = Offset(token.x + half, token.y + half);
+    for (final r in scene.revealedRects) {
+      // Revealed areas are drawn as ovals inscribed in their rects.
+      final rx = r.width / 2;
+      final ry = r.height / 2;
+      if (rx <= 0 || ry <= 0) continue;
+      final dx = (center.dx - r.center.dx) / rx;
+      final dy = (center.dy - r.center.dy) / ry;
+      if (dx * dx + dy * dy <= 1) return false;
+    }
+    return true;
   }
 
   Widget _tokenWidget(BuildContext context, MapToken token) {
@@ -177,9 +205,13 @@ class _MapCanvasState extends State<MapCanvas> {
   Widget build(BuildContext context) {
     final scene = widget.scene;
     final mc = widget.mapController;
-    final tokens = scene.tokens.where((t) => t.visibleToPlayers || mc.isGM);
+    final tokens = scene.tokens.where(
+      (t) => mc.isGM || (t.visibleToPlayers && !_isFogged(scene, t)),
+    );
     return InteractiveViewer(
       transformationController: _transform,
+      // The brush needs the drag; zooming still works while revealing.
+      panEnabled: !(widget.revealMode && mc.isGM && scene.fogEnabled),
       constrained: false,
       minScale: 0.1,
       maxScale: 4.0,
@@ -198,10 +230,45 @@ class _MapCanvasState extends State<MapCanvas> {
                 ),
               ),
             ),
-          // TODO: Phase 4 Fog of War CustomPainter Layer
           for (final token in tokens) _tokenWidget(context, token),
+          // Layer 4: Fog of War. Above the tokens so players cannot see
+          // tokens standing in fogged areas; ignores pointer events.
+          if (scene.fogEnabled)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: CustomPaint(
+                  painter: FogOfWarPainter(
+                    revealedRects: scene.revealedRects,
+                    isGM: mc.isGM,
+                  ),
+                ),
+              ),
+            ),
+          // GM brush: captures drags while in reveal mode.
+          if (widget.revealMode && mc.isGM && scene.fogEnabled)
+            Positioned.fill(
+              child: MouseRegion(
+                cursor: SystemMouseCursors.precise,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTapDown: (d) => _reveal(d.localPosition),
+                  onPanStart: (d) => _reveal(d.localPosition),
+                  onPanUpdate: (d) => _reveal(d.localPosition),
+                  onPanEnd: (_) => mc.endReveal(),
+                  onPanCancel: mc.endReveal,
+                  onTapUp: (_) => mc.endReveal(),
+                ),
+              ),
+            ),
         ],
       ),
     );
+  }
+
+  /// Reveals a circle under the brush. Radius scales with the grid so the
+  /// brush feels right on both small and large maps.
+  void _reveal(Offset scenePosition) {
+    final radius = (widget.scene.gridSize * 2).clamp(60.0, 240.0).toDouble();
+    widget.mapController.revealArea(scenePosition, radius);
   }
 }

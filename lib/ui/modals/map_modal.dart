@@ -42,6 +42,9 @@ class _MapModalState extends State<MapModal> {
   late MapCategory _tab;
   String? _selectedSceneId;
 
+  /// GM "Reveal Area" brush is active.
+  bool _revealMode = false;
+
   MapController get _map => widget.mapController;
   CharacterController get _chars => widget.characterController;
 
@@ -378,7 +381,58 @@ class _MapModalState extends State<MapModal> {
     ];
   }
 
+  Future<void> _resetFog() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reset Fog'),
+        content: const Text('Cover the whole map again for all players?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Reset'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) _map.resetFog();
+  }
+
+  List<Widget> _fogControls(MapScene scene) => [
+    Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Text('Fog of War'),
+        Switch(
+          value: scene.fogEnabled,
+          onChanged: (v) {
+            _map.setFogEnabled(v);
+            if (!v) setState(() => _revealMode = false);
+          },
+        ),
+      ],
+    ),
+    if (scene.fogEnabled) ...[
+      FilterChip(
+        avatar: const Icon(Icons.brush, size: 16),
+        label: const Text('Reveal Area (drag)'),
+        selected: _revealMode,
+        onSelected: (v) => setState(() => _revealMode = v),
+      ),
+      OutlinedButton.icon(
+        onPressed: _resetFog,
+        icon: const Icon(Icons.cloud),
+        label: const Text('Reset Fog'),
+      ),
+    ],
+  ];
+
   List<Widget> _sceneControls(MapScene scene) => [
+    ..._fogControls(scene),
     Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -448,6 +502,7 @@ class _MapModalState extends State<MapModal> {
                           mapController: _map,
                           currentCharacterId: _chars.active?.id,
                           onTokenMenu: _tokenMenu,
+                          revealMode: _revealMode,
                         ),
                 ),
               ),

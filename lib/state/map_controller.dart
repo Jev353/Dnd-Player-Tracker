@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/painting.dart' show Offset, Rect;
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
 import '../models/json_helpers.dart';
@@ -423,6 +424,50 @@ class MapController extends ChangeNotifier {
     notifyListeners();
     // Slider changes fire continuously, so throttle like a drag.
     _schedulePush();
+  }
+
+  // ---- Fog of War (GM only, applies to the viewed scene) ----
+  Offset? _lastReveal;
+
+  void setFogEnabled(bool enabled) {
+    if (!isGM) return;
+    final scene = activeScene;
+    if (scene == null) return;
+    _replaceActive(scene.copyWith(fogEnabled: enabled));
+    _pushNow();
+  }
+
+  /// Reveals a circle of [radius] around [center] (scene coordinates).
+  /// Pushes are throttled while brushing; finish with [endReveal].
+  void revealArea(Offset center, double radius) {
+    if (!isGM) return;
+    final scene = activeScene;
+    if (scene == null || !scene.fogEnabled) return;
+    // Skip near-duplicates so a long drag does not create thousands of rects.
+    final last = _lastReveal;
+    if (last != null && (center - last).distance < radius * 0.35) return;
+    _lastReveal = center;
+    final rect = Rect.fromCircle(center: center, radius: radius);
+    _replaceActive(
+      scene.copyWith(revealedRects: [...scene.revealedRects, rect]),
+    );
+    _schedulePush();
+  }
+
+  /// Ends a brush stroke and pushes the final fog state immediately.
+  void endReveal() {
+    if (_lastReveal == null) return;
+    _lastReveal = null;
+    _pushNow();
+  }
+
+  /// Covers the whole map again.
+  void resetFog() {
+    if (!isGM) return;
+    final scene = activeScene;
+    if (scene == null) return;
+    _replaceActive(scene.copyWith(revealedRects: const []));
+    _pushNow();
   }
 
   // ---- Tokens ----

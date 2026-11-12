@@ -1,3 +1,5 @@
+import 'dart:ui' show Rect;
+
 import 'json_helpers.dart';
 import 'map_layer.dart';
 import 'map_token.dart';
@@ -16,7 +18,10 @@ class MapScene {
     List<List<Map<String, double>>>? fogPolygons,
     List<MapLayer>? layers,
     this.activeLayerId = baseLayerId,
+    this.fogEnabled = false,
+    List<Rect>? revealedRects,
   }) : id = id ?? newId(),
+       revealedRects = revealedRects ?? [],
        layers = layers ?? [],
        tokens = tokens ?? [],
        fogPolygons = fogPolygons ?? [];
@@ -42,6 +47,13 @@ class MapScene {
 
   /// The layer players currently see (set when the GM pushes a layer).
   final String activeLayerId;
+
+  /// Fog of War: when true the map is covered except for [revealedRects].
+  final bool fogEnabled;
+
+  /// Areas the GM has revealed, in scene coordinates. Each rect is drawn as
+  /// an oval, so square rects from the brush appear as circles.
+  final List<Rect> revealedRects;
 
   bool hasLayer(String layerId) =>
       layerId == baseLayerId || layers.any((l) => l.id == layerId);
@@ -88,6 +100,16 @@ class MapScene {
         json['layers'],
       ).map((l) => MapLayer.fromJson(readMap(l))).toList(),
       activeLayerId: readString(json['activeLayerId'], baseLayerId),
+      fogEnabled: readBool(json['fogEnabled'], false),
+      revealedRects: readList(json['revealedRects']).map((r) {
+        final m = readMap(r);
+        return Rect.fromLTRB(
+          readDouble(m['l'], 0),
+          readDouble(m['t'], 0),
+          readDouble(m['r'], 0),
+          readDouble(m['b'], 0),
+        );
+      }).toList(),
     );
   }
 
@@ -104,6 +126,10 @@ class MapScene {
         .toList(),
     'layers': layers.map((l) => l.toJson()).toList(),
     'activeLayerId': activeLayerId,
+    'fogEnabled': fogEnabled,
+    'revealedRects': revealedRects
+        .map((r) => {'l': r.left, 't': r.top, 'r': r.right, 'b': r.bottom})
+        .toList(),
   };
 
   MapScene copyWith({
@@ -117,6 +143,8 @@ class MapScene {
     List<List<Map<String, double>>>? fogPolygons,
     List<MapLayer>? layers,
     String? activeLayerId,
+    bool? fogEnabled,
+    List<Rect>? revealedRects,
   }) => MapScene(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -128,5 +156,7 @@ class MapScene {
     fogPolygons: fogPolygons ?? this.fogPolygons,
     layers: layers ?? this.layers,
     activeLayerId: activeLayerId ?? this.activeLayerId,
+    fogEnabled: fogEnabled ?? this.fogEnabled,
+    revealedRects: revealedRects ?? this.revealedRects,
   );
 }
