@@ -76,7 +76,7 @@ class _MapCanvasState extends State<MapCanvas> {
   }
 
   Widget _background(BuildContext context) {
-    final url = widget.scene.imageUrl.trim();
+    final url = widget.mapController.shownImageUrl(widget.scene).trim();
     if (url.isEmpty) return _placeholder(context);
     final isRemote = url.startsWith('http://') || url.startsWith('https://');
     Widget error(BuildContext c, Object e, StackTrace? s) => _placeholder(c);

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../models/map_layer.dart';
 import '../../models/map_scene.dart';
 import '../../models/map_token.dart';
 import '../../state/character_controller.dart';
@@ -115,6 +116,25 @@ class _MapModalState extends State<MapModal> {
       _tab = scene.category;
       _selectedSceneId = scene.id;
     });
+  }
+
+  Future<void> _addLayer() async {
+    final layer = await showDialog<MapLayer>(
+      context: context,
+      builder: (_) => const AddLayerDialog(),
+    );
+    if (layer == null) return;
+    // In a synced party, local files are uploaded so players can load them.
+    final url = await _map.resolveImageUrl(layer.imageUrl);
+    if (!mounted) return;
+    final isLocalFile =
+        url.trim().isNotEmpty &&
+        !url.startsWith('http://') &&
+        !url.startsWith('https://');
+    if (_map.isSynced && isLocalFile) {
+      _toast('Image upload failed; players will not see this layer image.');
+    }
+    _map.addLayer(layer.copyWith(imageUrl: url));
   }
 
   Future<void> _addNpc() async {
@@ -285,11 +305,61 @@ class _MapModalState extends State<MapModal> {
               icon: const Icon(Icons.send),
               label: const Text('Push Scene to Party'),
             ),
+            if (scene != null) ..._layerControls(scene),
             if (scene != null) ..._sceneControls(scene),
           ],
         ),
       ),
     );
+  }
+
+  /// Layer picker for the viewed scene. Like scenes, switching only changes
+  /// the GM's view; "Push Layer to Party" is what players follow.
+  List<Widget> _layerControls(MapScene scene) {
+    final shown = _map.shownLayerId(scene);
+    final layers = <MapLayer>[
+      MapLayer(id: MapScene.baseLayerId, name: 'Base map'),
+      ...scene.layers,
+    ];
+    final removable = shown != MapScene.baseLayerId;
+    return [
+      DropdownButton<String>(
+        value: shown,
+        items: [
+          for (final l in layers)
+            DropdownMenuItem(
+              value: l.id,
+              child: Text(
+                l.id == scene.activeLayerId ? '${l.name} (live)' : l.name,
+              ),
+            ),
+        ],
+        onChanged: (id) {
+          if (id != null) _map.viewLayer(id);
+        },
+      ),
+      FilledButton.icon(
+        onPressed: shown == scene.activeLayerId
+            ? null
+            : () {
+                _map.pushLayer(shown);
+                _toast('Layer pushed to party.');
+              },
+        icon: const Icon(Icons.layers),
+        label: const Text('Push Layer to Party'),
+      ),
+      IconButton(
+        tooltip: 'Add layer to this map',
+        onPressed: _addLayer,
+        icon: const Icon(Icons.add_to_photos),
+      ),
+      if (removable)
+        IconButton(
+          tooltip: 'Remove this layer',
+          onPressed: () => _map.removeLayer(shown),
+          icon: const Icon(Icons.layers_clear),
+        ),
+    ];
   }
 
   List<Widget> _sceneControls(MapScene scene) => [

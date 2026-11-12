@@ -1,4 +1,5 @@
 import 'json_helpers.dart';
+import 'map_layer.dart';
 import 'map_token.dart';
 
 enum MapCategory { world, town, battle }
@@ -13,9 +14,15 @@ class MapScene {
     this.gridSize = 50.0,
     List<MapToken>? tokens,
     List<List<Map<String, double>>>? fogPolygons,
+    List<MapLayer>? layers,
+    this.activeLayerId = baseLayerId,
   }) : id = id ?? newId(),
+       layers = layers ?? [],
        tokens = tokens ?? [],
        fogPolygons = fogPolygons ?? [];
+
+  /// Id of the implicit base layer, which uses [imageUrl].
+  static const String baseLayerId = 'base';
 
   final String id;
   final String name;
@@ -29,6 +36,23 @@ class MapScene {
 
   /// Reserved for future Fog of War: each polygon is a list of {x, y} points.
   final List<List<Map<String, double>>> fogPolygons;
+
+  /// Extra background layers; the base map ([imageUrl]) is always available.
+  final List<MapLayer> layers;
+
+  /// The layer players currently see (set when the GM pushes a layer).
+  final String activeLayerId;
+
+  bool hasLayer(String layerId) =>
+      layerId == baseLayerId || layers.any((l) => l.id == layerId);
+
+  /// Image for [layerId]; falls back to the base map for unknown ids.
+  String imageUrlFor(String layerId) {
+    for (final l in layers) {
+      if (l.id == layerId) return l.imageUrl;
+    }
+    return imageUrl;
+  }
 
   static MapCategory _categoryFrom(dynamic v) {
     final s = readString(v, '');
@@ -60,6 +84,10 @@ class MapScene {
             }).toList(),
           )
           .toList(),
+      layers: readList(
+        json['layers'],
+      ).map((l) => MapLayer.fromJson(readMap(l))).toList(),
+      activeLayerId: readString(json['activeLayerId'], baseLayerId),
     );
   }
 
@@ -74,6 +102,8 @@ class MapScene {
     'fogPolygons': fogPolygons
         .map((poly) => poly.map((pt) => Map<String, double>.of(pt)).toList())
         .toList(),
+    'layers': layers.map((l) => l.toJson()).toList(),
+    'activeLayerId': activeLayerId,
   };
 
   MapScene copyWith({
@@ -85,6 +115,8 @@ class MapScene {
     double? gridSize,
     List<MapToken>? tokens,
     List<List<Map<String, double>>>? fogPolygons,
+    List<MapLayer>? layers,
+    String? activeLayerId,
   }) => MapScene(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -94,5 +126,7 @@ class MapScene {
     gridSize: gridSize ?? this.gridSize,
     tokens: tokens ?? this.tokens,
     fogPolygons: fogPolygons ?? this.fogPolygons,
+    layers: layers ?? this.layers,
+    activeLayerId: activeLayerId ?? this.activeLayerId,
   );
 }

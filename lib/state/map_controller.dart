@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../models/json_helpers.dart';
+import '../models/map_layer.dart';
 import '../models/map_scene.dart';
 import '../models/map_token.dart';
 import '../services/map_sync_service.dart';
@@ -209,6 +210,7 @@ class MapController extends ChangeNotifier {
   void addScene(MapScene scene) {
     if (!isGM) return;
     _scenes.add(scene);
+    viewedLayerId = null;
     viewedSceneId = scene.id;
     notifyListeners();
     _pushNow();
@@ -218,8 +220,75 @@ class MapController extends ChangeNotifier {
   void viewScene(String sceneId) {
     if (!isGM) return;
     if (!_scenes.any((s) => s.id == sceneId)) return;
+    if (viewedSceneId != sceneId) viewedLayerId = null;
     viewedSceneId = sceneId;
     notifyListeners();
+  }
+
+  // ---- Layers ----
+  /// GM-only, local: the layer the GM is looking at within the viewed scene.
+  /// Null means "same as the layer players see".
+  String? viewedLayerId;
+
+  /// The layer id this client is displaying for [scene]. Players always see
+  /// the pushed layer; the GM sees their own pick if it still exists.
+  String shownLayerId(MapScene scene) {
+    final v = viewedLayerId;
+    if (isGM && v != null && scene.hasLayer(v)) return v;
+    return scene.hasLayer(scene.activeLayerId)
+        ? scene.activeLayerId
+        : MapScene.baseLayerId;
+  }
+
+  /// Background image for what this client is displaying in [scene].
+  String shownImageUrl(MapScene scene) =>
+      scene.imageUrlFor(shownLayerId(scene));
+
+  /// GM only: adds a layer to the viewed scene and switches the GM to it.
+  /// Players keep seeing their layer until [pushLayer].
+  void addLayer(MapLayer layer) {
+    if (!isGM) return;
+    final scene = activeScene;
+    if (scene == null) return;
+    _replaceActive(scene.copyWith(layers: [...scene.layers, layer]));
+    viewedLayerId = layer.id;
+    notifyListeners();
+    _pushNow();
+  }
+
+  /// GM only: switch which layer the GM is viewing (local only).
+  void viewLayer(String layerId) {
+    if (!isGM) return;
+    final scene = activeScene;
+    if (scene == null || !scene.hasLayer(layerId)) return;
+    viewedLayerId = layerId;
+    notifyListeners();
+  }
+
+  /// GM only: "Push Layer to Party". Players on this scene switch to it.
+  void pushLayer(String layerId) {
+    if (!isGM) return;
+    final scene = activeScene;
+    if (scene == null || !scene.hasLayer(layerId)) return;
+    viewedLayerId = layerId;
+    _replaceActive(scene.copyWith(activeLayerId: layerId));
+    _pushNow();
+  }
+
+  /// GM only: removes an extra layer (the base map cannot be removed).
+  void removeLayer(String layerId) {
+    if (!isGM || layerId == MapScene.baseLayerId) return;
+    final scene = activeScene;
+    if (scene == null || !scene.layers.any((l) => l.id == layerId)) return;
+    final pushedWasRemoved = scene.activeLayerId == layerId;
+    if (viewedLayerId == layerId) viewedLayerId = null;
+    _replaceActive(
+      scene.copyWith(
+        layers: scene.layers.where((l) => l.id != layerId).toList(),
+        activeLayerId: pushedWasRemoved ? MapScene.baseLayerId : null,
+      ),
+    );
+    _pushNow();
   }
 
   /// GM only: "Push Scene to Party". Makes [sceneId] the party's scene and
@@ -228,6 +297,7 @@ class MapController extends ChangeNotifier {
     if (!isGM) return;
     if (!_scenes.any((s) => s.id == sceneId)) return;
     activeSceneId = sceneId;
+    if (viewedSceneId != sceneId) viewedLayerId = null;
     viewedSceneId = sceneId;
     notifyListeners();
     _pushNow();

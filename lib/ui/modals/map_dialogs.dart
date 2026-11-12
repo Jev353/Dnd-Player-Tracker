@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../../models/map_layer.dart';
 import '../../models/map_scene.dart';
 
 String categoryLabel(MapCategory c) =>
@@ -97,6 +98,95 @@ class _AddSceneDialogState extends State<AddSceneDialog> {
             MapScene(
               name: _name.text.trim().isEmpty ? 'New Map' : _name.text.trim(),
               category: _category,
+              imageUrl: _image.text.trim(),
+            ),
+          ),
+          child: const Text('Add'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Collects a name and image (URL or local file) for a new scene layer.
+class AddLayerDialog extends StatefulWidget {
+  const AddLayerDialog({super.key});
+
+  @override
+  State<AddLayerDialog> createState() => _AddLayerDialogState();
+}
+
+class _AddLayerDialogState extends State<AddLayerDialog> {
+  final _name = TextEditingController();
+  final _image = TextEditingController();
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _image.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pick() async {
+    try {
+      final result = await FilePicker.pickFiles(
+        dialogTitle: 'Choose layer image',
+        type: FileType.image,
+      );
+      final path = result?.files.single.path;
+      if (path != null) setState(() => _image.text = path);
+    } catch (e) {
+      debugPrint('Layer image pick failed: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Add Layer'),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _name,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Layer name (e.g. Night, Secret passages)',
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _image,
+                    decoration: const InputDecoration(
+                      labelText: 'Image URL or file path',
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Browse...',
+                  onPressed: _pick,
+                  icon: const Icon(Icons.folder_open),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(
+            context,
+            MapLayer(
+              name: _name.text.trim().isEmpty ? 'Layer' : _name.text.trim(),
               imageUrl: _image.text.trim(),
             ),
           ),
