@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../main.dart' show isCloudSyncConfigured;
+import '../models/dice_roll_event.dart';
 import '../models/json_helpers.dart';
 import '../models/map_scene.dart';
 import 'sync_service.dart';
@@ -13,6 +14,49 @@ class MapSyncService {
   static const String mapImageBucket = 'map-images';
 
   SupabaseClient get _supabase => Supabase.instance.client;
+
+  RealtimeChannel? _channel;
+
+  /// Called when another player broadcasts a dice roll.
+  void Function(DiceRollEvent event)? onRemoteDiceRoll;
+
+  /// Joins the party's realtime broadcast channel. No-op when cloud sync is
+  /// not configured.
+  void joinSession(
+    String partyCode, {
+    void Function(DiceRollEvent event)? onRemoteDiceRoll,
+  }) {
+    leaveSession();
+    if (onRemoteDiceRoll != null) this.onRemoteDiceRoll = onRemoteDiceRoll;
+    if (!isCloudSyncConfigured) return;
+    final code = SyncService.normalizeRoom(partyCode);
+    _channel = _supabase
+        .channel('party_map_$code')
+        .onBroadcast(
+          event: 'dice_roll',
+          callback: (payload) {
+            this.onRemoteDiceRoll?.call(DiceRollEvent.fromJson(payload));
+          },
+        )
+        .subscribe();
+  }
+
+  /// Leaves the realtime channel joined by [joinSession].
+  void leaveSession() {
+    final ch = _channel;
+    _channel = null;
+    if (ch != null) _supabase.removeChannel(ch);
+  }
+
+  /// Sends [event] to everyone else in the party lobby.
+  Future<void> broadcastDiceRoll(DiceRollEvent event) async {
+    if (_channel != null) {
+      await _channel!.sendBroadcastMessage(
+        event: 'dice_roll',
+        payload: event.toJson(),
+      );
+    }
+  }
 
   /// Upserts the whole party map document. [updatedAt] lets the caller
   /// remember the exact stamp so it can recognise its own echo.

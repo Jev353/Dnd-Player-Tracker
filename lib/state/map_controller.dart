@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart' show Offset, Rect;
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
+import '../models/dice_roll_event.dart';
 import '../models/json_helpers.dart';
 import '../models/map_layer.dart';
 import '../models/map_scene.dart';
@@ -175,13 +177,80 @@ class MapController extends ChangeNotifier {
     if (isGM && code != null && isSynced) _releaseGm(code);
   }
 
+  // ---- Dice ----
+  static const int _maxToasts = 4;
+
+  final List<DiceRollEvent> _activeRollToasts = [];
+  final List<Timer> _toastTimers = [];
+  final Random _random = Random();
+  bool _disposed = false;
+
+  List<DiceRollEvent> get activeRollToasts =>
+      List.unmodifiable(_activeRollToasts);
+
+  bool get isInParty => isSynced;
+
+  void _handleIncomingDiceRoll(DiceRollEvent event) {
+    if (_disposed || _activeRollToasts.any((e) => e.id == event.id)) return;
+    _activeRollToasts.add(event);
+    while (_activeRollToasts.length > _maxToasts) {
+      _activeRollToasts.removeAt(0);
+    }
+    notifyListeners();
+    late final Timer timer;
+    timer = Timer(const Duration(seconds: 6), () {
+      _toastTimers.remove(timer);
+      if (_disposed) return;
+      _activeRollToasts.removeWhere((e) => e.id == event.id);
+      notifyListeners();
+    });
+    _toastTimers.add(timer);
+  }
+
+  /// Rolls [quantity] x d[dieType], shows it locally, and broadcasts it to
+  /// the party when connected.
+  Future<DiceRollEvent> rollDice({
+    required int dieType,
+    int quantity = 1,
+    required String rollerName,
+  }) async {
+    final count = quantity < 1 ? 1 : quantity;
+    final results = [
+      for (var i = 0; i < count; i++) _random.nextInt(dieType) + 1,
+    ];
+    final event = DiceRollEvent(
+      id: newId(),
+      rollerName: rollerName,
+      dieType: dieType,
+      quantity: count,
+      results: results,
+      total: results.fold<int>(0, (a, b) => a + b),
+      timestamp: DateTime.now(),
+    );
+    _handleIncomingDiceRoll(event);
+    if (isInParty) {
+      try {
+        await _sync.broadcastDiceRoll(event);
+      } catch (e) {
+        debugPrint('broadcastDiceRoll failed: $e');
+      }
+    }
+    return event;
+  }
+
   // ---- Sync ----
   void _restartSubscription() {
     _sub?.cancel();
     _sub = null;
     _receivedFirst = false;
+    _sync.leaveSession();
     final code = partyCode;
     if (code == null || !isSynced) return;
+    try {
+      _sync.joinSession(code, onRemoteDiceRoll: _handleIncomingDiceRoll);
+    } catch (e) {
+      debugPrint('joinSession failed: $e');
+    }
     try {
       _sub = _sync
           .subscribeToPartyMap(code)
@@ -372,6 +441,13 @@ class MapController extends ChangeNotifier {
   void dispose() {
     _pushTimer?.cancel();
     _sub?.cancel();
+    for (final timer in _toastTimers) {
+      timer.cancel();
+    }
+    try {
+      _sync.leaveSession();
+    } catch (_) {}
+    _disposed = true;
     super.dispose();
   }
 

@@ -5,7 +5,9 @@ import '../../models/map_scene.dart';
 import '../../models/map_token.dart';
 import '../../state/character_controller.dart';
 import '../../state/map_controller.dart';
+import '../widgets/dice_roll_toast_overlay.dart';
 import '../widgets/map_canvas.dart';
+import 'dice_roller_dialog.dart';
 import 'map_dialogs.dart';
 import 'map_token_dialog.dart';
 
@@ -258,6 +260,15 @@ class _MapModalState extends State<MapModal> {
                 ),
               ),
             ),
+            OutlinedButton.icon(
+              onPressed: () => showDiceRollerDialog(
+                context,
+                mapController: _map,
+                rollerName: _chars.active?.name ?? '',
+              ),
+              icon: const Icon(Icons.casino_outlined),
+              label: const Text('Roll Dice'),
+            ),
             FilledButton.icon(
               onPressed: _dropMyCharacter,
               icon: const Icon(Icons.place),
@@ -482,28 +493,37 @@ class _MapModalState extends State<MapModal> {
         listenable: Listenable.merge([_map, _chars]),
         builder: (context, _) {
           final scene = _map.activeScene;
-          return Column(
+          return Stack(
             children: [
-              _header(context),
-              if (_map.isGM) _gmToolbar(context),
-              Expanded(
-                child: ClipRect(
-                  child: scene == null
-                      ? Center(
-                          child: Text(
-                            _map.isGM
-                                ? 'No scenes yet. Add a map scene to begin.'
-                                : 'Waiting for the GM to push a scene...',
-                          ),
-                        )
-                      : MapCanvas(
-                          key: ValueKey(scene.id),
-                          scene: scene,
-                          mapController: _map,
-                          currentCharacterId: _chars.active?.id,
-                          onTokenMenu: _tokenMenu,
-                          revealMode: _revealMode,
-                        ),
+              Column(
+                children: [
+                  _header(context),
+                  if (_map.isGM) _gmToolbar(context),
+                  Expanded(
+                    child: ClipRect(
+                      child: scene == null
+                          ? Center(
+                              child: Text(
+                                _map.isGM
+                                    ? 'No scenes yet. Add a map scene to begin.'
+                                    : 'Waiting for the GM to push a scene...',
+                              ),
+                            )
+                          : MapCanvas(
+                              key: ValueKey(scene.id),
+                              scene: scene,
+                              mapController: _map,
+                              currentCharacterId: _chars.active?.id,
+                              onTokenMenu: _tokenMenu,
+                              revealMode: _revealMode,
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+              Positioned.fill(
+                child: DiceRollToastOverlay(
+                  mapController: widget.mapController,
                 ),
               ),
             ],

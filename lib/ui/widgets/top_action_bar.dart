@@ -5,6 +5,7 @@ import '../../main.dart' show isCloudSyncConfigured;
 import '../../models/character.dart';
 import '../../state/character_controller.dart';
 import '../../state/map_controller.dart';
+import '../modals/dice_roller_dialog.dart';
 import '../modals/map_modal.dart';
 
 class TopActionBar extends StatelessWidget {
@@ -203,6 +204,16 @@ class TopActionBar extends StatelessWidget {
                       ),
                       icon: const Icon(Icons.map),
                       label: const Text('Party Map'),
+                    ),
+                  if (mapController != null)
+                    OutlinedButton.icon(
+                      onPressed: () => showDiceRollerDialog(
+                        context,
+                        mapController: mapController!,
+                        rollerName: ctrl.active?.name ?? '',
+                      ),
+                      icon: const Icon(Icons.casino_outlined),
+                      label: const Text('Roll Dice'),
                     ),
                   OutlinedButton.icon(
                     onPressed: () async {
