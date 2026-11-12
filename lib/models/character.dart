@@ -75,24 +75,25 @@ class Character {
     List<FeatureNote>? proficiencies,
     required this.spellSlots,
     List<Spell>? spells,
-  })  : id = id ?? newId(),
-        skillExpertise = skillExpertise ?? {for (final s in skillNames) s: false},
-        weapons = weapons ?? [],
-        items = items ?? [],
-        featuresAndNotes = featuresAndNotes ?? [],
-        proficiencies = proficiencies ?? [],
-        spells = spells ?? [];
+  }) : id = id ?? newId(),
+       skillExpertise =
+           skillExpertise ?? {for (final s in skillNames) s: false},
+       weapons = weapons ?? [],
+       items = items ?? [],
+       featuresAndNotes = featuresAndNotes ?? [],
+       proficiencies = proficiencies ?? [],
+       spells = spells ?? [];
 
   static const List<String> currencyKeys = ['cp', 'sp', 'ep', 'gp', 'pp'];
 
   factory Character.blank({String name = 'New Character'}) => Character(
-        name: name,
-        abilities: {for (final a in abilityNames) a: 10},
-        savingThrowProficiencies: {for (final a in abilityNames) a: false},
-        skillProficiencies: {for (final s in skillNames) s: false},
-        currency: {for (final c in currencyKeys) c: 0},
-        spellSlots: {for (var l = 1; l <= 9; l++) l: SpellSlot()},
-      );
+    name: name,
+    abilities: {for (final a in abilityNames) a: 10},
+    savingThrowProficiencies: {for (final a in abilityNames) a: false},
+    skillProficiencies: {for (final s in skillNames) s: false},
+    currency: {for (final c in currencyKeys) c: 0},
+    spellSlots: {for (var l = 1; l <= 9; l++) l: SpellSlot()},
+  );
 
   // ---- Derived math ----
   static int modifierFor(int score) => ((score - 10) / 2).floor();
@@ -187,65 +188,61 @@ class Character {
           s: readBool(readMap(json['skillExpertise'])[s], false),
       },
       currency: {for (final c in currencyKeys) c: readInt(cur[c], 0)},
-      weapons: readList(json['weapons'])
-          .whereType<Map>()
-          .map((e) => Weapon.fromJson(readMap(e)))
-          .toList(),
+      weapons: readList(
+        json['weapons'],
+      ).whereType<Map>().map((e) => Weapon.fromJson(readMap(e))).toList(),
       items: readList(json['items'])
           .whereType<Map>()
           .map((e) => InventoryItem.fromJson(readMap(e)))
           .toList(),
-      featuresAndNotes: readList(json['featuresAndNotes'])
-          .whereType<Map>()
-          .map((e) => FeatureNote.fromJson(readMap(e)))
-          .toList(),
-      proficiencies: readList(json['proficiencies'])
-          .whereType<Map>()
-          .map((e) => FeatureNote.fromJson(readMap(e)))
-          .toList(),
+      featuresAndNotes: readList(
+        json['featuresAndNotes'],
+      ).whereType<Map>().map((e) => FeatureNote.fromJson(readMap(e))).toList(),
+      proficiencies: readList(
+        json['proficiencies'],
+      ).whereType<Map>().map((e) => FeatureNote.fromJson(readMap(e))).toList(),
       spellSlots: {
         for (var l = 1; l <= 9; l++)
           l: slots['$l'] is Map
               ? SpellSlot.fromJson(readMap(slots['$l']))
               : SpellSlot(),
       },
-      spells: readList(json['spells'])
-          .whereType<Map>()
-          .map((e) => Spell.fromJson(readMap(e)))
-          .toList(),
+      spells: readList(
+        json['spells'],
+      ).whereType<Map>().map((e) => Spell.fromJson(readMap(e))).toList(),
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'characterClass': characterClass,
-        'bio': bio,
-        'level': level,
-        'proficiencyBonus': proficiencyBonus,
-        'armorClass': armorClass,
-        'initiative': initiative,
-        'speed': speed,
-        'hp': {'current': hpCurrent, 'max': hpMax, 'temp': hpTemp},
-        'hitDice': {'total': hitDiceTotal, 'remaining': hitDiceRemaining},
-        'deathSaves': {
-          'successes': deathSaveSuccesses,
-          'failures': deathSaveFailures,
-        },
-        'spellcastingAbility': spellcastingAbility,
-        'exhaustion': exhaustion,
-        'abilities': abilities,
-        'savingThrowProficiencies': savingThrowProficiencies,
-        'skillProficiencies': skillProficiencies,
-        'skillExpertise': skillExpertise,
-        'currency': currency,
-        'weapons': weapons.map((e) => e.toJson()).toList(),
-        'items': items.map((e) => e.toJson()).toList(),
-        'featuresAndNotes': featuresAndNotes.map((e) => e.toJson()).toList(),
-        'proficiencies': proficiencies.map((e) => e.toJson()).toList(),
-        'spellSlots': {
-          for (final e in spellSlots.entries) '${e.key}': e.value.toJson(),
-        },
-        'spells': spells.map((e) => e.toJson()).toList(),
-      };
+    'id': id,
+    'name': name,
+    'characterClass': characterClass,
+    'bio': bio,
+    'level': level,
+    'proficiencyBonus': proficiencyBonus,
+    'armorClass': armorClass,
+    'initiative': initiative,
+    'speed': speed,
+    'hp': {'current': hpCurrent, 'max': hpMax, 'temp': hpTemp},
+    'hitDice': {'total': hitDiceTotal, 'remaining': hitDiceRemaining},
+    'deathSaves': {
+      'successes': deathSaveSuccesses,
+      'failures': deathSaveFailures,
+    },
+    'spellcastingAbility': spellcastingAbility,
+    'exhaustion': exhaustion,
+    'abilities': abilities,
+    'savingThrowProficiencies': savingThrowProficiencies,
+    'skillProficiencies': skillProficiencies,
+    'skillExpertise': skillExpertise,
+    'currency': currency,
+    'weapons': weapons.map((e) => e.toJson()).toList(),
+    'items': items.map((e) => e.toJson()).toList(),
+    'featuresAndNotes': featuresAndNotes.map((e) => e.toJson()).toList(),
+    'proficiencies': proficiencies.map((e) => e.toJson()).toList(),
+    'spellSlots': {
+      for (final e in spellSlots.entries) '${e.key}': e.value.toJson(),
+    },
+    'spells': spells.map((e) => e.toJson()).toList(),
+  };
 }

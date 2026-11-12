@@ -97,62 +97,26 @@ class TopActionBar extends StatelessWidget {
       return;
     }
     final room = ctrl.currentRoomCode;
-    final field = TextEditingController();
-    await showDialog<void>(
+    final result = await showDialog<_JoinResult>(
       context: context,
-      builder: (ctx) {
-        String? error;
-        return StatefulBuilder(
-          builder: (ctx, setState) {
-            void submit() {
-              final code = field.text.toUpperCase().trim();
-              if (!RegExp(r'^[A-Z0-9]{4,8}\$').hasMatch(code)) {
-                setState(() => error = 'Use 4-8 letters or numbers.');
-                return;
-              }
-              Navigator.pop(ctx);
-              ctrl.joinRoom(code);
-            }
-
-            return AlertDialog(
-              title: Text(room == null ? 'Join Party' : 'Room: '),
-              content: room != null
-                  ? const Text(
-                      'You are connected. Disconnect to leave this room.',
-                    )
-                  : TextField(
-                      controller: field,
-                      autofocus: true,
-                      maxLength: 8,
-                      textCapitalization: TextCapitalization.characters,
-                      decoration: InputDecoration(
-                        labelText: 'Room Code (4-8 characters)',
-                        errorText: error,
-                      ),
-                      onSubmitted: (_) => submit(),
-                    ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Cancel'),
-                ),
-                if (room != null)
-                  FilledButton(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      ctrl.leaveRoom();
-                    },
-                    child: const Text('Disconnect'),
-                  )
-                else
-                  FilledButton(onPressed: submit, child: const Text('Join')),
-              ],
-            );
-          },
-        );
-      },
+      builder: (dialogContext) =>
+          _JoinPartyDialog(ctrl: ctrl, connectedRoom: room),
     );
-    field.dispose();
+    if (result == null) return;
+    // The dialog is fully popped; only now mutate controller state so the
+    // Party Bar is inserted outside of the dialog's teardown.
+    if (result.disconnect) {
+      ctrl.leaveRoom();
+      return;
+    }
+    final code = result.roomCode;
+    if (code == null) return;
+    try {
+      await ctrl.joinRoom(code, skipPush: true);
+    } catch (e) {
+      debugPrint('Join party failed: $e');
+      if (context.mounted) _toast(context, e.toString());
+    }
   }
 
   @override
@@ -325,6 +289,111 @@ class PartyBar extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _JoinResult {
+  const _JoinResult.join(String this.roomCode) : disconnect = false;
+  const _JoinResult.disconnect() : roomCode = null, disconnect = true;
+
+  final String? roomCode;
+  final bool disconnect;
+}
+
+class _JoinPartyDialog extends StatefulWidget {
+  const _JoinPartyDialog({required this.ctrl, required this.connectedRoom});
+
+  final CharacterController ctrl;
+  final String? connectedRoom;
+
+  @override
+  State<_JoinPartyDialog> createState() => _JoinPartyDialogState();
+}
+
+class _JoinPartyDialogState extends State<_JoinPartyDialog> {
+  final TextEditingController _field = TextEditingController();
+  bool _isLoading = false;
+  String? _errorText;
+
+  @override
+  void dispose() {
+    _field.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_isLoading) return;
+    final code = _field.text.trim();
+    if (!RegExp(r'^[a-zA-Z0-9]{4,8}$').hasMatch(code)) {
+      setState(() => _errorText = 'Use 4-8 letters or numbers.');
+      return;
+    }
+    setState(() {
+      _isLoading = true;
+      _errorText = null;
+    });
+    try {
+      await widget.ctrl.verifyRoom(code);
+    } catch (e) {
+      debugPrint('Join party failed: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorText = e.toString();
+        });
+      }
+      return;
+    }
+    if (!mounted) return;
+    // Pop first; the caller updates controller state after the dialog closes.
+    Navigator.of(context).pop(_JoinResult.join(code));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final room = widget.connectedRoom;
+    return AlertDialog(
+      title: Text(room == null ? 'Join Party' : 'Room: $room'),
+      content: room != null
+          ? const Text('You are connected. Disconnect to leave this room.')
+          : TextField(
+              controller: _field,
+              autofocus: true,
+              enabled: !_isLoading,
+              maxLength: 8,
+              textCapitalization: TextCapitalization.characters,
+              decoration: InputDecoration(
+                labelText: 'Room Code (4-8 characters)',
+                errorText: _errorText,
+                errorMaxLines: 12,
+                counterText: '',
+              ),
+              onSubmitted: (_) => _submit(),
+            ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        if (room != null)
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(context).pop(const _JoinResult.disconnect()),
+            child: const Text('Disconnect'),
+          )
+        else
+          FilledButton(
+            onPressed: _isLoading ? null : _submit,
+            child: _isLoading
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('Join'),
+          ),
+      ],
     );
   }
 }

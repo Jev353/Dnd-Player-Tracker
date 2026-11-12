@@ -6,17 +6,21 @@ import '../../state/character_controller.dart';
 import '../widgets/common.dart';
 
 /// Opens the note dialog. Pass [note] to view it, or null to create one.
-Future<void> showNoteModal(BuildContext context, CharacterController ctrl,
-    {FeatureNote? note, bool proficiency = false}) {
+Future<void> showNoteModal(
+  BuildContext context,
+  CharacterController ctrl, {
+  FeatureNote? note,
+  bool proficiency = false,
+}) {
   return showDialog(
     context: context,
-    builder: (_) => _NoteDialog(ctrl: ctrl, note: note, proficiency: proficiency),
+    builder: (_) =>
+        _NoteDialog(ctrl: ctrl, note: note, proficiency: proficiency),
   );
 }
 
 class _NoteDialog extends StatefulWidget {
-  const _NoteDialog(
-      {required this.ctrl, this.note, this.proficiency = false});
+  const _NoteDialog({required this.ctrl, this.note, this.proficiency = false});
   final CharacterController ctrl;
   final FeatureNote? note;
   final bool proficiency;
@@ -61,36 +65,48 @@ class _NoteDialogState extends State<_NoteDialog> {
   Widget build(BuildContext context) {
     final note = widget.note;
     return AlertDialog(
-      title: Text(note == null
-          ? 'Add $_noun'
-          : (_editing ? 'Edit $_noun' : note.name)),
+      title: Text(
+        note == null ? 'Add $_noun' : (_editing ? 'Edit $_noun' : note.name),
+      ),
       content: SizedBox(
         width: 460,
         child: _editing
             ? SingleChildScrollView(
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  const SizedBox(height: 4),
-                  TextCommitField(
-                      label: 'Name', value: _name, onChanged: (v) => _name = v),
-                  if (_error != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(_error!,
-                          style: TextStyle(
-                              color: Theme.of(context).colorScheme.error)),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(height: 4),
+                    TextCommitField(
+                      label: 'Name',
+                      value: _name,
+                      onChanged: (v) => _name = v,
                     ),
-                  const SizedBox(height: 12),
-                  TextCommitField(
+                    if (_error != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          _error!,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 12),
+                    TextCommitField(
                       label: 'Description',
                       value: _desc,
                       maxLines: 8,
-                      onChanged: (v) => _desc = v),
-                ]),
+                      onChanged: (v) => _desc = v,
+                    ),
+                  ],
+                ),
               )
             : SingleChildScrollView(
-                child: SelectableText(note!.description.isEmpty
-                    ? 'No description.'
-                    : note.description),
+                child: SelectableText(
+                  note!.description.isEmpty
+                      ? 'No description.'
+                      : note.description,
+                ),
               ),
       ),
       actions: _editing
@@ -111,8 +127,9 @@ class _NoteDialogState extends State<_NoteDialog> {
                 child: const Text('Cancel'),
               ),
               FilledButton(
-                  onPressed: _save,
-                  child: Text(note == null ? 'Save' : 'Save Changes')),
+                onPressed: _save,
+                child: Text(note == null ? 'Save' : 'Save Changes'),
+              ),
             ]
           : [
               TextButton(
@@ -123,11 +140,13 @@ class _NoteDialogState extends State<_NoteDialog> {
                 child: const Text('Delete'),
               ),
               OutlinedButton(
-                  onPressed: () => setState(() => _editing = true),
-                  child: const Text('Edit')),
+                onPressed: () => setState(() => _editing = true),
+                child: const Text('Edit'),
+              ),
               FilledButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Close')),
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
             ],
     );
   }

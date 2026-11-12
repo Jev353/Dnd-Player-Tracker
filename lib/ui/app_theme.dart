@@ -51,7 +51,8 @@ ThemeData buildAppTheme() {
     dividerTheme: DividerThemeData(color: gold.withValues(alpha: 0.2)),
     checkboxTheme: CheckboxThemeData(
       fillColor: WidgetStateProperty.resolveWith(
-          (s) => s.contains(WidgetState.selected) ? gold : null),
+        (s) => s.contains(WidgetState.selected) ? gold : null,
+      ),
       checkColor: WidgetStatePropertyAll(scheme.onPrimary),
     ),
     textTheme: Typography.whiteMountainView.apply(

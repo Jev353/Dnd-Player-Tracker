@@ -24,26 +24,26 @@ class Weapon {
   }) : id = id ?? newId();
 
   factory Weapon.fromJson(Map<String, dynamic> json) => Weapon(
-        id: readString(json['id'], newId()),
-        name: readString(json['name'], 'Unnamed Weapon'),
-        amount: readInt(json['amount'], 1),
-        attackBonus: readString(json['attackBonus'], ''),
-        damage: readString(json['damage'], ''),
-        damageType: readString(json['damageType'], ''),
-        range: readString(json['range'], ''),
-        properties: readString(json['properties'], ''),
-        description: readString(json['description'], ''),
-      );
+    id: readString(json['id'], newId()),
+    name: readString(json['name'], 'Unnamed Weapon'),
+    amount: readInt(json['amount'], 1),
+    attackBonus: readString(json['attackBonus'], ''),
+    damage: readString(json['damage'], ''),
+    damageType: readString(json['damageType'], ''),
+    range: readString(json['range'], ''),
+    properties: readString(json['properties'], ''),
+    description: readString(json['description'], ''),
+  );
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'amount': amount,
-        'attackBonus': attackBonus,
-        'damage': damage,
-        'damageType': damageType,
-        'range': range,
-        'properties': properties,
-        'description': description,
-      };
+    'id': id,
+    'name': name,
+    'amount': amount,
+    'attackBonus': attackBonus,
+    'damage': damage,
+    'damageType': damageType,
+    'range': range,
+    'properties': properties,
+    'description': description,
+  };
 }

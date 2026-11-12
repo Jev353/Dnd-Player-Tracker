@@ -5,8 +5,11 @@ import '../../state/character_controller.dart';
 import '../widgets/common.dart';
 
 /// Opens the weapon dialog. Pass [weapon] to view it, or null to create one.
-Future<void> showWeaponModal(BuildContext context, CharacterController ctrl,
-    {Weapon? weapon}) {
+Future<void> showWeaponModal(
+  BuildContext context,
+  CharacterController ctrl, {
+  Weapon? weapon,
+}) {
   return showDialog(
     context: context,
     builder: (_) => _WeaponDialog(ctrl: ctrl, weapon: weapon),
@@ -79,13 +82,12 @@ class _WeaponDialogState extends State<_WeaponDialog> {
   Widget build(BuildContext context) {
     final weapon = widget.weapon;
     return AlertDialog(
-      title: Text(weapon == null
-          ? 'Add Weapon'
-          : (_editing ? 'Edit Weapon' : weapon.name)),
-      content: SizedBox(
-        width: 520,
-        child: _editing ? _form() : _view(weapon!),
+      title: Text(
+        weapon == null
+            ? 'Add Weapon'
+            : (_editing ? 'Edit Weapon' : weapon.name),
       ),
+      content: SizedBox(width: 520, child: _editing ? _form() : _view(weapon!)),
       actions: _editing
           ? [
               TextButton(
@@ -103,8 +105,9 @@ class _WeaponDialogState extends State<_WeaponDialog> {
                 child: const Text('Cancel'),
               ),
               FilledButton(
-                  onPressed: _save,
-                  child: Text(weapon == null ? 'Save' : 'Save Changes')),
+                onPressed: _save,
+                child: Text(weapon == null ? 'Save' : 'Save Changes'),
+              ),
             ]
           : [
               TextButton(
@@ -115,97 +118,139 @@ class _WeaponDialogState extends State<_WeaponDialog> {
                 child: const Text('Delete'),
               ),
               OutlinedButton(
-                  onPressed: () => setState(() => _editing = true),
-                  child: const Text('Edit')),
+                onPressed: () => setState(() => _editing = true),
+                child: const Text('Edit'),
+              ),
               FilledButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Close')),
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
             ],
     );
   }
 
-  Widget _field(String label, String value, ValueChanged<String> onChanged,
-          {int maxLines = 1}) =>
-      Padding(
-        padding: const EdgeInsets.only(top: 12),
-        child: TextCommitField(
-            label: label,
-            value: value,
-            maxLines: maxLines,
-            onChanged: onChanged),
-      );
+  Widget _field(
+    String label,
+    String value,
+    ValueChanged<String> onChanged, {
+    int maxLines = 1,
+  }) => Padding(
+    padding: const EdgeInsets.only(top: 12),
+    child: TextCommitField(
+      label: label,
+      value: value,
+      maxLines: maxLines,
+      onChanged: onChanged,
+    ),
+  );
 
   Widget _form() => SingleChildScrollView(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const SizedBox(height: 4),
-          TextCommitField(
-              label: 'Weapon Name',
-              value: _draft.name,
-              onChanged: (v) => _draft.name = v),
-          if (_error != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(_error!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(height: 4),
+        TextCommitField(
+          label: 'Weapon Name',
+          value: _draft.name,
+          onChanged: (v) => _draft.name = v,
+        ),
+        if (_error != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              _error!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
-          const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: IntField(
-                label: 'Amount',
-                value: _draft.amount,
-                onChanged: (v) => _draft.amount = v),
           ),
-          _field('Attack Bonus (e.g. +5)', _draft.attackBonus,
-              (v) => _draft.attackBonus = v),
-          _field('Damage (e.g. 1d8 + 3)', _draft.damage,
-              (v) => _draft.damage = v),
-          _field('Damage Type (e.g. slashing)', _draft.damageType,
-              (v) => _draft.damageType = v),
-          _field('Range (e.g. 5 ft / 80-320 ft)', _draft.range,
-              (v) => _draft.range = v),
-          _field('Properties (e.g. Finesse, Light)', _draft.properties,
-              (v) => _draft.properties = v),
-          _field('Description', _draft.description,
-              (v) => _draft.description = v,
-              maxLines: 6),
-        ]),
-      );
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: IntField(
+            label: 'Amount',
+            value: _draft.amount,
+            onChanged: (v) => _draft.amount = v,
+          ),
+        ),
+        _field(
+          'Attack Bonus (e.g. +5)',
+          _draft.attackBonus,
+          (v) => _draft.attackBonus = v,
+        ),
+        _field(
+          'Damage (e.g. 1d8 + 3)',
+          _draft.damage,
+          (v) => _draft.damage = v,
+        ),
+        _field(
+          'Damage Type (e.g. slashing)',
+          _draft.damageType,
+          (v) => _draft.damageType = v,
+        ),
+        _field(
+          'Range (e.g. 5 ft / 80-320 ft)',
+          _draft.range,
+          (v) => _draft.range = v,
+        ),
+        _field(
+          'Properties (e.g. Finesse, Light)',
+          _draft.properties,
+          (v) => _draft.properties = v,
+        ),
+        _field(
+          'Description',
+          _draft.description,
+          (v) => _draft.description = v,
+          maxLines: 6,
+        ),
+      ],
+    ),
+  );
 
   Widget _meta(String label, String value) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          SizedBox(
-              width: 110,
-              child: Text(label,
-                  style: const TextStyle(fontWeight: FontWeight.bold))),
-          Expanded(child: SelectableText(value.isEmpty ? '-' : value)),
-        ]),
-      );
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 110,
+          child: Text(
+            label,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+        Expanded(child: SelectableText(value.isEmpty ? '-' : value)),
+      ],
+    ),
+  );
 
   Widget _view(Weapon w) => Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
         children: [
-          Row(children: [
-            const Text('Amount:'),
-            IconButton(
-                icon: const Icon(Icons.remove), onPressed: () => _step(-1)),
-            Text('${w.amount}', style: Theme.of(context).textTheme.titleMedium),
-            IconButton(icon: const Icon(Icons.add), onPressed: () => _step(1)),
-          ]),
-          _meta('Attack Bonus', w.attackBonus),
-          _meta('Damage', w.damage),
-          _meta('Damage Type', w.damageType),
-          _meta('Range', w.range),
-          _meta('Properties', w.properties),
-          const Divider(),
-          Flexible(
-            child: SingleChildScrollView(
-              child: SelectableText(
-                  w.description.isEmpty ? 'No description.' : w.description),
-            ),
+          const Text('Amount:'),
+          IconButton(
+            icon: const Icon(Icons.remove),
+            onPressed: () => _step(-1),
           ),
+          Text('${w.amount}', style: Theme.of(context).textTheme.titleMedium),
+          IconButton(icon: const Icon(Icons.add), onPressed: () => _step(1)),
         ],
-      );
+      ),
+      _meta('Attack Bonus', w.attackBonus),
+      _meta('Damage', w.damage),
+      _meta('Damage Type', w.damageType),
+      _meta('Range', w.range),
+      _meta('Properties', w.properties),
+      const Divider(),
+      Flexible(
+        child: SingleChildScrollView(
+          child: SelectableText(
+            w.description.isEmpty ? 'No description.' : w.description,
+          ),
+        ),
+      ),
+    ],
+  );
 }

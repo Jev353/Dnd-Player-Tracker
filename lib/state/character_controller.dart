@@ -96,7 +96,21 @@ class CharacterController extends ChangeNotifier {
     }
   }
 
-  Future<void> joinRoom(String roomCode) async {
+  /// Pushes the active character to [roomCode] without touching any
+  /// listener-visible state (no notifyListeners). Throws on Supabase errors.
+  Future<void> verifyRoom(String roomCode) async {
+    final c = _active;
+    if (c == null) return;
+    try {
+      await _syncService.pushCharacter(roomCode: roomCode, character: c);
+    } catch (e) {
+      debugPrint('verifyRoom pushCharacter failed: $e');
+      rethrow;
+    }
+  }
+
+  /// Joins [roomCode]. Pass [skipPush] when [verifyRoom] already succeeded.
+  Future<void> joinRoom(String roomCode, {bool skipPush = false}) async {
     final room = SyncService.normalizeRoom(roomCode);
     currentRoomCode = room;
     partyMembers = [];
@@ -104,7 +118,17 @@ class CharacterController extends ChangeNotifier {
     syncError = null;
     notifyListeners();
     final c = _active;
-    if (c != null) await _push(c);
+    if (c != null && !skipPush) {
+      try {
+        await _syncService.pushCharacter(roomCode: room, character: c);
+      } catch (e) {
+        debugPrint('joinRoom pushCharacter failed: $e');
+        currentRoomCode = null;
+        syncError = e.toString();
+        notifyListeners();
+        rethrow;
+      }
+    }
     _syncService.listenToParty(
       roomCode: room,
       onPartyUpdated: (members) {

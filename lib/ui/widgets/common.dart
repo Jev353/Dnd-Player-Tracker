@@ -3,7 +3,12 @@ import 'package:flutter/services.dart';
 
 /// Titled card used for every dashboard section.
 class SectionCard extends StatelessWidget {
-  const SectionCard({super.key, required this.title, required this.child, this.trailing});
+  const SectionCard({
+    super.key,
+    required this.title,
+    required this.child,
+    this.trailing,
+  });
 
   final String title;
   final Widget child;
@@ -21,10 +26,13 @@ class SectionCard extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: Text(title,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.primary,
-                          fontWeight: FontWeight.bold)),
+                  child: Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
                 if (trailing != null) trailing!,
               ],
@@ -101,8 +109,9 @@ class IntField extends StatefulWidget {
 }
 
 class _IntFieldState extends State<IntField> {
-  late final TextEditingController _c =
-      TextEditingController(text: '${widget.value}');
+  late final TextEditingController _c = TextEditingController(
+    text: '${widget.value}',
+  );
   final FocusNode _focus = FocusNode();
 
   @override
@@ -130,7 +139,8 @@ class _IntFieldState extends State<IntField> {
         keyboardType: TextInputType.number,
         inputFormatters: [
           FilteringTextInputFormatter.allow(
-              RegExp(widget.allowNegative ? r'^-?\d*' : r'^\d*')),
+            RegExp(widget.allowNegative ? r'^-?\d*' : r'^\d*'),
+          ),
         ],
         decoration: InputDecoration(
           labelText: widget.label,
@@ -166,8 +176,9 @@ class TextCommitField extends StatefulWidget {
 }
 
 class _TextCommitFieldState extends State<TextCommitField> {
-  late final TextEditingController _c =
-      TextEditingController(text: widget.value);
+  late final TextEditingController _c = TextEditingController(
+    text: widget.value,
+  );
 
   @override
   void dispose() {

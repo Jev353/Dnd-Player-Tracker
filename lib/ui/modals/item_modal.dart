@@ -5,8 +5,11 @@ import '../../state/character_controller.dart';
 import '../widgets/common.dart';
 
 /// Opens the item dialog. Pass [item] to view it, or null to create one.
-Future<void> showItemModal(BuildContext context, CharacterController ctrl,
-    {InventoryItem? item}) {
+Future<void> showItemModal(
+  BuildContext context,
+  CharacterController ctrl, {
+  InventoryItem? item,
+}) {
   return showDialog(
     context: context,
     builder: (_) => _ItemDialog(ctrl: ctrl, item: item),
@@ -37,8 +40,13 @@ class _ItemDialogState extends State<_ItemDialog> {
     final existing = widget.item;
     widget.ctrl.mutate((c) {
       if (existing == null) {
-        c.items.add(InventoryItem(
-            name: _name.trim(), amount: _amount, description: _desc));
+        c.items.add(
+          InventoryItem(
+            name: _name.trim(),
+            amount: _amount,
+            description: _desc,
+          ),
+        );
       } else {
         existing
           ..name = _name.trim()
@@ -65,13 +73,10 @@ class _ItemDialogState extends State<_ItemDialog> {
   Widget build(BuildContext context) {
     final item = widget.item;
     return AlertDialog(
-      title: Text(item == null
-          ? 'Add Item'
-          : (_editing ? 'Edit Item' : item.name)),
-      content: SizedBox(
-        width: 460,
-        child: _editing ? _form() : _view(item!),
+      title: Text(
+        item == null ? 'Add Item' : (_editing ? 'Edit Item' : item.name),
       ),
+      content: SizedBox(width: 460, child: _editing ? _form() : _view(item!)),
       actions: _editing
           ? [
               TextButton(
@@ -91,8 +96,9 @@ class _ItemDialogState extends State<_ItemDialog> {
                 child: const Text('Cancel'),
               ),
               FilledButton(
-                  onPressed: _save,
-                  child: Text(item == null ? 'Save' : 'Save Changes')),
+                onPressed: _save,
+                child: Text(item == null ? 'Save' : 'Save Changes'),
+              ),
             ]
           : [
               TextButton(
@@ -103,60 +109,81 @@ class _ItemDialogState extends State<_ItemDialog> {
                 child: const Text('Delete'),
               ),
               OutlinedButton(
-                  onPressed: () => setState(() => _editing = true),
-                  child: const Text('Edit')),
+                onPressed: () => setState(() => _editing = true),
+                child: const Text('Edit'),
+              ),
               FilledButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Close')),
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
             ],
     );
   }
 
   Widget _form() => SingleChildScrollView(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const SizedBox(height: 4),
-          TextCommitField(
-              label: 'Name', value: _name, onChanged: (v) => _name = v),
-          if (_error != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(_error!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(height: 4),
+        TextCommitField(
+          label: 'Name',
+          value: _name,
+          onChanged: (v) => _name = v,
+        ),
+        if (_error != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              _error!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
-          const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: IntField(
-                label: 'Amount', value: _amount, onChanged: (v) => _amount = v),
           ),
-          const SizedBox(height: 12),
-          TextCommitField(
-              label: 'Description',
-              value: _desc,
-              maxLines: 6,
-              onChanged: (v) => _desc = v),
-        ]),
-      );
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: IntField(
+            label: 'Amount',
+            value: _amount,
+            onChanged: (v) => _amount = v,
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextCommitField(
+          label: 'Description',
+          value: _desc,
+          maxLines: 6,
+          onChanged: (v) => _desc = v,
+        ),
+      ],
+    ),
+  );
 
   Widget _view(InventoryItem item) => Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
         children: [
-          Row(children: [
-            const Text('Amount:'),
-            IconButton(
-                icon: const Icon(Icons.remove), onPressed: () => _step(-1)),
-            Text('${item.amount}',
-                style: Theme.of(context).textTheme.titleMedium),
-            IconButton(icon: const Icon(Icons.add), onPressed: () => _step(1)),
-          ]),
-          const Divider(),
-          Flexible(
-            child: SingleChildScrollView(
-              child: SelectableText(
-                  item.description.isEmpty ? 'No description.' : item.description),
-            ),
+          const Text('Amount:'),
+          IconButton(
+            icon: const Icon(Icons.remove),
+            onPressed: () => _step(-1),
           ),
+          Text(
+            '${item.amount}',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          IconButton(icon: const Icon(Icons.add), onPressed: () => _step(1)),
         ],
-      );
+      ),
+      const Divider(),
+      Flexible(
+        child: SingleChildScrollView(
+          child: SelectableText(
+            item.description.isEmpty ? 'No description.' : item.description,
+          ),
+        ),
+      ),
+    ],
+  );
 }

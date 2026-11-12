@@ -5,8 +5,11 @@ import '../../state/character_controller.dart';
 import '../widgets/common.dart';
 
 /// Opens the spell dialog. Pass [spell] to view it, or null to create one.
-Future<void> showSpellModal(BuildContext context, CharacterController ctrl,
-    {Spell? spell}) {
+Future<void> showSpellModal(
+  BuildContext context,
+  CharacterController ctrl, {
+  Spell? spell,
+}) {
   return showDialog(
     context: context,
     builder: (_) => _SpellDialog(ctrl: ctrl, spell: spell),
@@ -73,13 +76,10 @@ class _SpellDialogState extends State<_SpellDialog> {
   Widget build(BuildContext context) {
     final spell = widget.spell;
     return AlertDialog(
-      title: Text(spell == null
-          ? 'Add Spell'
-          : (_editing ? 'Edit Spell' : spell.name)),
-      content: SizedBox(
-        width: 520,
-        child: _editing ? _form() : _view(spell!),
+      title: Text(
+        spell == null ? 'Add Spell' : (_editing ? 'Edit Spell' : spell.name),
       ),
+      content: SizedBox(width: 520, child: _editing ? _form() : _view(spell!)),
       actions: _editing
           ? [
               TextButton(
@@ -97,8 +97,9 @@ class _SpellDialogState extends State<_SpellDialog> {
                 child: const Text('Cancel'),
               ),
               FilledButton(
-                  onPressed: _save,
-                  child: Text(spell == null ? 'Save' : 'Save Changes')),
+                onPressed: _save,
+                child: Text(spell == null ? 'Save' : 'Save Changes'),
+              ),
             ]
           : [
               TextButton(
@@ -109,105 +110,129 @@ class _SpellDialogState extends State<_SpellDialog> {
                 child: const Text('Delete'),
               ),
               OutlinedButton(
-                  onPressed: () => setState(() => _editing = true),
-                  child: const Text('Edit')),
+                onPressed: () => setState(() => _editing = true),
+                child: const Text('Edit'),
+              ),
               FilledButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Close')),
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
             ],
     );
   }
 
   Widget _form() => SingleChildScrollView(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const SizedBox(height: 4),
-          TextCommitField(
-              label: 'Spell Name',
-              value: _draft.name,
-              onChanged: (v) => _draft.name = v),
-          if (_error != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(_error!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(height: 4),
+        TextCommitField(
+          label: 'Spell Name',
+          value: _draft.name,
+          onChanged: (v) => _draft.name = v,
+        ),
+        if (_error != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              _error!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<int>(
-            initialValue: _draft.level,
-            decoration: const InputDecoration(
-                labelText: 'Spell Level',
-                isDense: true,
-                border: OutlineInputBorder()),
-            items: [
-              for (var l = 0; l <= 9; l++)
-                DropdownMenuItem(
-                    value: l, child: Text(l == 0 ? '0 (Cantrip)' : '$l')),
-            ],
-            onChanged: (v) => _draft.level = v ?? 0,
           ),
-          const SizedBox(height: 12),
-          TextCommitField(
-              label: 'Casting Time',
-              value: _draft.castingTime,
-              onChanged: (v) => _draft.castingTime = v),
-          const SizedBox(height: 12),
-          TextCommitField(
-              label: 'Range',
-              value: _draft.range,
-              onChanged: (v) => _draft.range = v),
-          const SizedBox(height: 12),
-          TextCommitField(
-              label: 'Duration',
-              value: _draft.duration,
-              onChanged: (v) => _draft.duration = v),
-          const SizedBox(height: 12),
-          TextCommitField(
-              label: 'Components',
-              value: _draft.components,
-              onChanged: (v) => _draft.components = v),
-          const SizedBox(height: 12),
-          TextCommitField(
-              label: 'Damage (e.g. 8d6 fire)',
-              value: _draft.damage,
-              onChanged: (v) => _draft.damage = v),
-          const SizedBox(height: 12),
-          TextCommitField(
-              label: 'Description',
-              value: _draft.description,
-              maxLines: 6,
-              onChanged: (v) => _draft.description = v),
-        ]),
-      );
+        const SizedBox(height: 12),
+        DropdownButtonFormField<int>(
+          initialValue: _draft.level,
+          decoration: const InputDecoration(
+            labelText: 'Spell Level',
+            isDense: true,
+            border: OutlineInputBorder(),
+          ),
+          items: [
+            for (var l = 0; l <= 9; l++)
+              DropdownMenuItem(
+                value: l,
+                child: Text(l == 0 ? '0 (Cantrip)' : '$l'),
+              ),
+          ],
+          onChanged: (v) => _draft.level = v ?? 0,
+        ),
+        const SizedBox(height: 12),
+        TextCommitField(
+          label: 'Casting Time',
+          value: _draft.castingTime,
+          onChanged: (v) => _draft.castingTime = v,
+        ),
+        const SizedBox(height: 12),
+        TextCommitField(
+          label: 'Range',
+          value: _draft.range,
+          onChanged: (v) => _draft.range = v,
+        ),
+        const SizedBox(height: 12),
+        TextCommitField(
+          label: 'Duration',
+          value: _draft.duration,
+          onChanged: (v) => _draft.duration = v,
+        ),
+        const SizedBox(height: 12),
+        TextCommitField(
+          label: 'Components',
+          value: _draft.components,
+          onChanged: (v) => _draft.components = v,
+        ),
+        const SizedBox(height: 12),
+        TextCommitField(
+          label: 'Damage (e.g. 8d6 fire)',
+          value: _draft.damage,
+          onChanged: (v) => _draft.damage = v,
+        ),
+        const SizedBox(height: 12),
+        TextCommitField(
+          label: 'Description',
+          value: _draft.description,
+          maxLines: 6,
+          onChanged: (v) => _draft.description = v,
+        ),
+      ],
+    ),
+  );
 
   Widget _meta(String label, String value) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          SizedBox(
-              width: 110,
-              child: Text(label,
-                  style: const TextStyle(fontWeight: FontWeight.bold))),
-          Expanded(child: SelectableText(value.isEmpty ? '-' : value)),
-        ]),
-      );
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 110,
+          child: Text(
+            label,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+        Expanded(child: SelectableText(value.isEmpty ? '-' : value)),
+      ],
+    ),
+  );
 
   Widget _view(Spell s) => Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Chip(label: Text(levelLabel(s.level))),
-          const SizedBox(height: 8),
-          _meta('Casting Time', s.castingTime),
-          _meta('Range', s.range),
-          _meta('Duration', s.duration),
-          _meta('Components', s.components),
-          _meta('Damage', s.damage),
-          const Divider(),
-          Flexible(
-            child: SingleChildScrollView(
-              child: SelectableText(
-                  s.description.isEmpty ? 'No description.' : s.description),
-            ),
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Chip(label: Text(levelLabel(s.level))),
+      const SizedBox(height: 8),
+      _meta('Casting Time', s.castingTime),
+      _meta('Range', s.range),
+      _meta('Duration', s.duration),
+      _meta('Components', s.components),
+      _meta('Damage', s.damage),
+      const Divider(),
+      Flexible(
+        child: SingleChildScrollView(
+          child: SelectableText(
+            s.description.isEmpty ? 'No description.' : s.description,
           ),
-        ],
-      );
+        ),
+      ),
+    ],
+  );
 }

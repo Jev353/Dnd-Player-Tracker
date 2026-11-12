@@ -22,10 +22,11 @@ class DashboardScreen extends StatelessWidget {
         return Scaffold(
           body: Column(
             children: [
-              TopActionBar(ctrl: ctrl),
-              PartyBar(ctrl: ctrl),
+              TopActionBar(key: const ValueKey('top-action-bar'), ctrl: ctrl),
+              PartyBar(key: const ValueKey('party-bar'), ctrl: ctrl),
               if (viewing)
                 Material(
+                  key: const ValueKey('read-only-banner'),
                   color: Theme.of(context).colorScheme.tertiaryContainer,
                   child: InkWell(
                     onTap: () => ctrl.inspectPartyMember(null),
@@ -46,10 +47,11 @@ class DashboardScreen extends StatelessWidget {
                   ),
                 ),
               Expanded(
+                key: const ValueKey('dashboard-body'),
                 child: c == null
                     ? const Center(child: Text('No character loaded'))
-                    : IgnorePointer(
-                        ignoring: viewing,
+                    : KeyedSubtree(
+                        key: const ValueKey('dashboard-columns'),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [

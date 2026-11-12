@@ -27,7 +27,9 @@ Future<void> showBioModal(BuildContext context, CharacterController ctrl) {
       ),
       actions: [
         FilledButton(
-            onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Close'),
+        ),
       ],
     ),
   );

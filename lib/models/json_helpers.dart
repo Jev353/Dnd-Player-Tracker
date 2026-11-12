@@ -25,6 +25,5 @@ Map<String, dynamic> readMap(dynamic v) {
 
 List<dynamic> readList(dynamic v) => v is List ? v : <dynamic>[];
 
-String newId() =>
-    '${DateTime.now().microsecondsSinceEpoch}-${_counter++}';
+String newId() => '${DateTime.now().microsecondsSinceEpoch}-${_counter++}';
 int _counter = 0;

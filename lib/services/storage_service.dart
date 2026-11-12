@@ -8,7 +8,7 @@ import '../models/character.dart';
 /// Local file I/O for character JSON files. One character = one .json file.
 class StorageService {
   StorageService({Directory? overrideDirectory})
-      : _overrideDirectory = overrideDirectory;
+    : _overrideDirectory = overrideDirectory;
 
   final Directory? _overrideDirectory;
   Directory? _dir;
@@ -22,7 +22,8 @@ class StorageService {
     } else {
       final docs = await getApplicationDocumentsDirectory();
       dir = Directory(
-          '${docs.path}${Platform.pathSeparator}DnDPlayerTracker${Platform.pathSeparator}characters');
+        '${docs.path}${Platform.pathSeparator}DnDPlayerTracker${Platform.pathSeparator}characters',
+      );
     }
     if (!await dir.exists()) await dir.create(recursive: true);
     _dir = dir;
@@ -44,7 +45,8 @@ class StorageService {
       if (entity is! File || !entity.path.toLowerCase().endsWith('.json')) {
         continue;
       }
-      final c = await _readCharacter(entity) ??
+      final c =
+          await _readCharacter(entity) ??
           await _readCharacter(File('${entity.path}.bak'));
       if (c != null) result.add(c);
     }
@@ -68,8 +70,9 @@ class StorageService {
     final file = await _fileFor(character.id);
     final tmp = File('${file.path}.tmp');
     final bak = File('${file.path}.bak');
-    final content =
-        const JsonEncoder.withIndent('  ').convert(character.toJson());
+    final content = const JsonEncoder.withIndent(
+      '  ',
+    ).convert(character.toJson());
 
     await tmp.writeAsString(content, flush: true);
     if (await file.exists()) {
@@ -88,7 +91,11 @@ class StorageService {
 
   Future<void> delete(Character character) async {
     final file = await _fileFor(character.id);
-    for (final f in [file, File('${file.path}.bak'), File('${file.path}.tmp')]) {
+    for (final f in [
+      file,
+      File('${file.path}.bak'),
+      File('${file.path}.tmp'),
+    ]) {
       if (await f.exists()) await f.delete();
     }
   }
@@ -113,8 +120,9 @@ class StorageService {
 
   Future<void> exportTo(Character character, String path) async {
     final target = path.toLowerCase().endsWith('.json') ? path : '$path.json';
-    final content =
-        const JsonEncoder.withIndent('  ').convert(character.toJson());
+    final content = const JsonEncoder.withIndent(
+      '  ',
+    ).convert(character.toJson());
     await File(target).writeAsString(content, flush: true);
   }
 }
