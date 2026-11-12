@@ -3,6 +3,7 @@ import 'json_helpers.dart';
 class Weapon {
   String id;
   String name;
+  int amount;
   String attackBonus;
   String damage;
   String damageType;
@@ -13,6 +14,7 @@ class Weapon {
   Weapon({
     String? id,
     this.name = '',
+    this.amount = 1,
     this.attackBonus = '',
     this.damage = '',
     this.damageType = '',
@@ -24,6 +26,7 @@ class Weapon {
   factory Weapon.fromJson(Map<String, dynamic> json) => Weapon(
         id: readString(json['id'], newId()),
         name: readString(json['name'], 'Unnamed Weapon'),
+        amount: readInt(json['amount'], 1),
         attackBonus: readString(json['attackBonus'], ''),
         damage: readString(json['damage'], ''),
         damageType: readString(json['damageType'], ''),
@@ -35,6 +38,7 @@ class Weapon {
   Map<String, dynamic> toJson() => {
         'id': id,
         'name': name,
+        'amount': amount,
         'attackBonus': attackBonus,
         'damage': damage,
         'damageType': damageType,

@@ -56,6 +56,7 @@ class InventoryColumn extends StatelessWidget {
                   itemBuilder: (w) => ListTile(
                     dense: true,
                     title: Text(w.name),
+                    trailing: Text('x${w.amount}'),
                     subtitle: (w.attackBonus.isEmpty && w.damage.isEmpty)
                         ? null
                         : Text([

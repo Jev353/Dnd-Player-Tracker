@@ -16,6 +16,7 @@ Future<void> showWeaponModal(BuildContext context, CharacterController ctrl,
 void _copyWeapon(Weapon from, Weapon to) {
   to
     ..name = from.name.trim()
+    ..amount = from.amount
     ..attackBonus = from.attackBonus
     ..damage = from.damage
     ..damageType = from.damageType
@@ -64,6 +65,14 @@ class _WeaponDialogState extends State<_WeaponDialog> {
     } else {
       setState(() => _editing = false);
     }
+  }
+
+  void _step(int delta) {
+    final weapon = widget.weapon!;
+    widget.ctrl.mutate((_) {
+      weapon.amount = (weapon.amount + delta).clamp(0, 999999);
+    });
+    setState(() => _draft.amount = weapon.amount);
   }
 
   @override
@@ -139,6 +148,14 @@ class _WeaponDialogState extends State<_WeaponDialog> {
               child: Text(_error!,
                   style: TextStyle(color: Theme.of(context).colorScheme.error)),
             ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: IntField(
+                label: 'Amount',
+                value: _draft.amount,
+                onChanged: (v) => _draft.amount = v),
+          ),
           _field('Attack Bonus (e.g. +5)', _draft.attackBonus,
               (v) => _draft.attackBonus = v),
           _field('Damage (e.g. 1d8 + 3)', _draft.damage,
@@ -170,6 +187,13 @@ class _WeaponDialogState extends State<_WeaponDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Row(children: [
+            const Text('Amount:'),
+            IconButton(
+                icon: const Icon(Icons.remove), onPressed: () => _step(-1)),
+            Text('${w.amount}', style: Theme.of(context).textTheme.titleMedium),
+            IconButton(icon: const Icon(Icons.add), onPressed: () => _step(1)),
+          ]),
           _meta('Attack Bonus', w.attackBonus),
           _meta('Damage', w.damage),
           _meta('Damage Type', w.damageType),
