@@ -42,4 +42,3 @@ class GridPainter extends CustomPainter {
       old.color != color ||
       old.transform != transform;
 }
-

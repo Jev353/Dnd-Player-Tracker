@@ -10,7 +10,10 @@ import 'grid_painter.dart';
 /// Parses '#RRGGBB' (or 'RRGGBB'); falls back to the theme gold.
 Color parseHexColor(String hex) {
   final cleaned = hex.replaceAll('#', '').trim();
-  final value = int.tryParse(cleaned.length == 6 ? 'FF$cleaned' : cleaned, radix: 16);
+  final value = int.tryParse(
+    cleaned.length == 6 ? 'FF$cleaned' : cleaned,
+    radix: 16,
+  );
   return value == null ? const Color(0xFFD4AF37) : Color(value);
 }
 
@@ -58,7 +61,10 @@ class _MapCanvasState extends State<MapCanvas> {
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: scheme.surfaceContainerLow,
-        border: Border.all(color: scheme.primary.withValues(alpha: 0.4), width: 2),
+        border: Border.all(
+          color: scheme.primary.withValues(alpha: 0.4),
+          width: 2,
+        ),
       ),
       child: Text(
         widget.scene.name,
@@ -80,12 +86,12 @@ class _MapCanvasState extends State<MapCanvas> {
   }
 
   void _drag(MapToken token, Offset delta) {
-    // Pan deltas are in screen pixels; convert to scene units.
-    final scale = _transform.value.getMaxScaleOnAxis();
+    // The delta is reported in the token's local (scene) coordinates, which
+    // already account for the InteractiveViewer's zoom; do not rescale it.
     widget.mapController.moveToken(
       token.id,
-      token.x + delta.dx / scale,
-      token.y + delta.dy / scale,
+      token.x + delta.dx,
+      token.y + delta.dy,
       currentCharacterId: widget.currentCharacterId,
     );
   }
@@ -95,7 +101,8 @@ class _MapCanvasState extends State<MapCanvas> {
     final mc = widget.mapController;
     final diameter = scene.gridSize * token.size;
     final color = parseHexColor(token.colorHex);
-    final canMove = mc.isGM ||
+    final canMove =
+        mc.isGM ||
         (token.characterId != null &&
             token.characterId == widget.currentCharacterId);
     final ghost = !token.visibleToPlayers;
@@ -106,14 +113,26 @@ class _MapCanvasState extends State<MapCanvas> {
       left: token.x,
       top: token.y,
       child: GestureDetector(
-        onPanUpdate: canMove ? (d) => _drag(token, d.delta) : null,
-        onPanEnd: canMove && scene.gridEnabled
-            ? (_) => mc.snapTokenToGrid(token.id)
+        onPanStart: canMove
+            ? (_) => mc.beginTokenDrag(
+                token.id,
+                currentCharacterId: widget.currentCharacterId,
+              )
             : null,
-        onLongPressStart:
-            menu == null ? null : (d) => menu(token, d.globalPosition),
-        onSecondaryTapUp:
-            menu == null ? null : (d) => menu(token, d.globalPosition),
+        onPanUpdate: canMove ? (d) => _drag(token, d.delta) : null,
+        onPanEnd: canMove
+            ? (_) {
+                if (scene.gridEnabled) mc.snapTokenToGrid(token.id);
+                mc.endTokenDrag();
+              }
+            : null,
+        onPanCancel: canMove ? mc.endTokenDrag : null,
+        onLongPressStart: menu == null
+            ? null
+            : (d) => menu(token, d.globalPosition),
+        onSecondaryTapUp: menu == null
+            ? null
+            : (d) => menu(token, d.globalPosition),
         child: Tooltip(
           message: token.label,
           child: Opacity(

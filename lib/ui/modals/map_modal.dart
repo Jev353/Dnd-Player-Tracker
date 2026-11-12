@@ -8,8 +8,6 @@ import '../widgets/map_canvas.dart';
 import 'map_dialogs.dart';
 import 'map_token_dialog.dart';
 
-const _localPartyCode = 'LOCAL';
-
 /// Opens the Party Map as a ~90% viewport dialog.
 Future<void> showMapModal(
   BuildContext context, {
@@ -50,28 +48,27 @@ class _MapModalState extends State<MapModal> {
   void initState() {
     super.initState();
     _tab = _map.activeScene?.category ?? MapCategory.world;
-    _selectedSceneId = _map.activeSceneId;
-    if (_map.partyCode == null) {
-      // Defer: notifying listeners during initState would assert.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || _map.partyCode != null) return;
-        _map.setPartySession(
-          partyCode: _chars.currentRoomCode ?? _localPartyCode,
-          isGM: _map.isGM,
-        );
-      });
-    }
+    _selectedSceneId = _map.activeScene?.id;
+    // Defer: notifying listeners during initState would assert. Always
+    // re-sync the session to the current room (it may have changed).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final code = _currentCode;
+      if (_map.partyCode != code) {
+        _map.setPartySession(partyCode: code, isGM: _map.isGM);
+      }
+    });
   }
+
+  String get _currentCode =>
+      _chars.currentRoomCode ?? MapController.localPartyCode;
 
   void _toast(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   void _toggleRole(bool gm) {
-    _map.setPartySession(
-      partyCode: _chars.currentRoomCode ?? _map.partyCode ?? _localPartyCode,
-      isGM: gm,
-    );
+    _map.setPartySession(partyCode: _currentCode, isGM: gm);
   }
 
   void _dropMyCharacter() {
@@ -103,7 +100,17 @@ class _MapModalState extends State<MapModal> {
       builder: (_) => AddSceneDialog(initialCategory: _tab),
     );
     if (scene == null) return;
-    _map.addScene(scene);
+    // In a synced party, local files are uploaded so players can load them.
+    final url = await _map.resolveImageUrl(scene.imageUrl);
+    if (!mounted) return;
+    final isLocalFile =
+        url.trim().isNotEmpty &&
+        !url.startsWith('http://') &&
+        !url.startsWith('https://');
+    if (_map.isSynced && isLocalFile) {
+      _toast('Image upload failed; players will not see this map image.');
+    }
+    _map.addScene(scene.copyWith(imageUrl: url));
     setState(() {
       _tab = scene.category;
       _selectedSceneId = scene.id;
@@ -162,19 +169,45 @@ class _MapModalState extends State<MapModal> {
                 for (final c in MapCategory.values)
                   ButtonSegment(value: c, label: Text(categoryLabel(c))),
               ],
-              selected: {_tab},
-              onSelectionChanged: (s) => setState(() {
-                _tab = s.first;
-                final inTab = _map.scenes.where((x) => x.category == _tab);
-                if (!inTab.any((x) => x.id == _selectedSceneId)) {
-                  _selectedSceneId = inTab.isEmpty ? null : inTab.first.id;
-                }
-              }),
+              // Connected players are locked to the GM's scene, so the tabs
+              // just mirror its category and cannot be changed.
+              selected: {
+                _map.isSynced && !_map.isGM
+                    ? (_map.activeScene?.category ?? _tab)
+                    : _tab,
+              },
+              onSelectionChanged: _map.isSynced && !_map.isGM
+                  ? null
+                  : (s) => setState(() {
+                      _tab = s.first;
+                      final inTab = _map.scenes.where(
+                        (x) => x.category == _tab,
+                      );
+                      if (!inTab.any((x) => x.id == _selectedSceneId)) {
+                        _selectedSceneId = inTab.isEmpty
+                            ? null
+                            : inTab.first.id;
+                        final id = _selectedSceneId;
+                        if (id != null) _map.viewScene(id);
+                      }
+                    }),
             ),
             Chip(
               avatar: const Icon(Icons.vpn_key, size: 16),
               label: Text('Party: ${_map.partyCode ?? '-'}'),
             ),
+            if (_map.syncError != null)
+              Tooltip(
+                message: _map.syncError!,
+                child: Chip(
+                  avatar: Icon(
+                    Icons.sync_problem,
+                    size: 16,
+                    color: scheme.error,
+                  ),
+                  label: const Text('Sync issue'),
+                ),
+              ),
             Chip(
               avatar: Icon(_map.isGM ? Icons.shield : Icons.person, size: 16),
               label: Text(_map.isGM ? 'GM Mode' : 'Player Mode'),
@@ -234,12 +267,21 @@ class _MapModalState extends State<MapModal> {
                     ),
                   ),
               ],
-              onChanged: (id) => setState(() => _selectedSceneId = id),
+              // Switching only changes the GM's own view; players keep seeing
+              // the pushed scene until "Push Scene to Party" is pressed.
+              onChanged: (id) {
+                if (id == null) return;
+                setState(() => _selectedSceneId = id);
+                _map.viewScene(id);
+              },
             ),
             FilledButton.icon(
-              onPressed: selected == null
+              onPressed: selected == null || selected == _map.activeSceneId
                   ? null
-                  : () => _map.setActiveScene(selected),
+                  : () {
+                      _map.setActiveScene(selected);
+                      _toast('Scene pushed to party.');
+                    },
               icon: const Icon(Icons.send),
               label: const Text('Push Scene to Party'),
             ),
