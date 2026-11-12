@@ -26,6 +26,9 @@ class Character {
   int deathSaveSuccesses;
   int deathSaveFailures;
 
+  /// Exhaustion level, 0..maxExhaustion.
+  int exhaustion;
+
   /// Ability used for spellcasting (one of STR..CHA).
   String spellcastingAbility;
 
@@ -59,6 +62,7 @@ class Character {
     this.hitDiceRemaining = 1,
     this.deathSaveSuccesses = 0,
     this.deathSaveFailures = 0,
+    this.exhaustion = 0,
     this.spellcastingAbility = 'INT',
     required this.abilities,
     required this.savingThrowProficiencies,
@@ -134,6 +138,7 @@ class Character {
     }
     deathSaveSuccesses = 0;
     deathSaveFailures = 0;
+    if (exhaustion > 0) exhaustion -= 1;
   }
 
   // ---- Serialization ----
@@ -166,6 +171,7 @@ class Character {
       hitDiceRemaining: readInt(hitDice['remaining'], 1),
       deathSaveSuccesses: readInt(death['successes'], 0),
       deathSaveFailures: readInt(death['failures'], 0),
+      exhaustion: readInt(json['exhaustion'], 0).clamp(0, maxExhaustion),
       spellcastingAbility: abilityNames.contains(json['spellcastingAbility'])
           ? json['spellcastingAbility'] as String
           : 'INT',
@@ -227,6 +233,7 @@ class Character {
           'failures': deathSaveFailures,
         },
         'spellcastingAbility': spellcastingAbility,
+        'exhaustion': exhaustion,
         'abilities': abilities,
         'savingThrowProficiencies': savingThrowProficiencies,
         'skillProficiencies': skillProficiencies,

@@ -26,6 +26,20 @@ const Map<String, String> skillAbilities = {
 
 List<String> get skillNames => skillAbilities.keys.toList();
 
+const int maxExhaustion = 6;
+
+/// Effects at each exhaustion level (2024 / 5.5e Player's Handbook).
+/// Each level: D20 Tests -2 per level, Speed -5 ft per level; level 6 = death.
+String exhaustionEffect(int level) {
+  if (level <= 0) return 'No exhaustion.';
+  if (level >= maxExhaustion) {
+    return 'Level 6: You die.';
+  }
+  return 'Level $level: D20 Tests (attack rolls, ability checks, saving '
+      'throws) are reduced by ${level * 2}. Speed is reduced by '
+      '${level * 5} feet. A Long Rest removes 1 level of exhaustion.';
+}
+
 /// Creates a blank character with default stats.
 Character defaultCharacter({String name = 'New Character'}) {
   return Character.blank(name: name);

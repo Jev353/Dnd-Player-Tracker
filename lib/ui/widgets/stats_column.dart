@@ -23,6 +23,7 @@ class StatsColumn extends StatelessWidget {
         _identity(c),
         _combat(c),
         _HpCard(ctrl: ctrl, c: c),
+        _exhaustion(c),
         _abilities(c),
         _saves(c),
         _skills(c),
@@ -93,6 +94,33 @@ class StatsColumn extends StatelessWidget {
               label: 'Speed',
               value: c.speed,
               onChanged: (v) => ctrl.mutate((x) => x.speed = v)),
+        ]),
+      );
+
+  Widget _exhaustion(Character c) => SectionCard(
+        title: 'Exhaustion',
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            IconButton(
+              tooltip: 'Decrease exhaustion',
+              icon: const Icon(Icons.remove_circle_outline),
+              onPressed: c.exhaustion > 0
+                  ? () => ctrl.mutate((x) => x.exhaustion -= 1)
+                  : null,
+            ),
+            Text('Level ${c.exhaustion} / $maxExhaustion',
+                style: const TextStyle(
+                    fontSize: 18, fontWeight: FontWeight.bold)),
+            IconButton(
+              tooltip: 'Increase exhaustion',
+              icon: const Icon(Icons.add_circle_outline),
+              onPressed: c.exhaustion < maxExhaustion
+                  ? () => ctrl.mutate((x) => x.exhaustion += 1)
+                  : null,
+            ),
+          ]),
+          Text(exhaustionEffect(c.exhaustion),
+              key: const ValueKey('exhaustion-effect')),
         ]),
       );
 
