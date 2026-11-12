@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
 import '../models/json_helpers.dart';
 import '../models/map_layer.dart';
@@ -62,12 +63,97 @@ class MapController extends ChangeNotifier {
   MapScene? get activeScene =>
       (isGM ? _sceneById(viewedSceneId) : null) ?? partyScene;
 
+  /// Id of the client holding the GM seat for this party (synced parties).
+  String? gmId;
+
+  final String _fallbackClientId = newId();
+
+  /// Stable id for this client: the Supabase user id when available.
+  String get clientId => _sync.currentUserId ?? _fallbackClientId;
+
+  /// True when someone other than this client holds the GM seat.
+  bool get gmTaken => isSynced && gmId != null && gmId != clientId;
+
+  /// Joins [partyCode]. In a synced party the GM seat is exclusive, so
+  /// [isGM] is ignored there: call [requestGm] to claim it instead.
   void setPartySession({required String partyCode, required bool isGM}) {
     final changed = this.partyCode != partyCode;
+    if (changed) {
+      _releaseGmQuietly();
+      gmId = null;
+    }
     this.partyCode = partyCode;
-    this.isGM = isGM;
-    if (changed) _restartSubscription();
+    if (changed) {
+      this.isGM = isSynced ? false : isGM;
+      viewedSceneId = null;
+      viewedLayerId = null;
+      _restartSubscription();
+    } else if (!isSynced) {
+      this.isGM = isGM;
+    }
     notifyListeners();
+  }
+
+  /// Tries to become GM. Local (unsynced) sessions always succeed; in a
+  /// synced party this fails if another player already holds the seat.
+  Future<bool> requestGm() async {
+    final code = partyCode;
+    if (code == null || !isSynced) {
+      isGM = true;
+      notifyListeners();
+      return true;
+    }
+    try {
+      final ok = await _sync.claimGm(code, clientId);
+      if (ok) {
+        gmId = clientId;
+        isGM = true;
+        syncError = null;
+      } else {
+        // Refreshed from the stream shortly; mark taken in the meantime.
+        gmId ??= '?';
+      }
+      notifyListeners();
+      return ok;
+    } catch (e) {
+      debugPrint('claimGm failed: $e');
+      final missingColumn =
+          e is PostgrestException &&
+          (e.code == '42703' || e.code == 'PGRST204');
+      syncError = missingColumn
+          ? 'Supabase is missing the gm_id column. Run supabase_party_maps.sql '
+                'in the Supabase SQL Editor, then try again.'
+          : 'Could not claim GM: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Gives up the GM seat so another player can take it.
+  Future<void> releaseGm() async {
+    final code = partyCode;
+    final wasGm = isGM;
+    isGM = false;
+    viewedSceneId = null;
+    viewedLayerId = null;
+    if (wasGm && code != null && isSynced) {
+      gmId = null;
+      await _releaseGm(code);
+    }
+    notifyListeners();
+  }
+
+  Future<void> _releaseGm(String code) async {
+    try {
+      await _sync.releaseGm(code, clientId);
+    } catch (e) {
+      debugPrint('releaseGm failed: $e');
+    }
+  }
+
+  void _releaseGmQuietly() {
+    final code = partyCode;
+    if (isGM && code != null && isSynced) _releaseGm(code);
   }
 
   // ---- Sync ----
@@ -96,8 +182,25 @@ class MapController extends ChangeNotifier {
     final first = !_receivedFirst;
     _receivedFirst = true;
     if (row == null) {
+      gmId = null;
       // No shared state yet: a GM seeds it with whatever they have locally.
       if (first && isGM && _scenes.isNotEmpty) _pushNow();
+      return;
+    }
+    // GM seat: always honoured, even for our own echoes. If someone else
+    // now holds it, step down.
+    final gm = row['gm_id'];
+    gmId = gm == null ? null : readString(gm, '');
+    if (isGM && gmId != null && gmId != clientId) {
+      isGM = false;
+      viewedSceneId = null;
+      viewedLayerId = null;
+    }
+    // Claiming GM creates an empty row; keep the GM's local scenes then.
+    final remoteScenes = readList(row['scenes']);
+    if (first && isGM && remoteScenes.isEmpty && _scenes.isNotEmpty) {
+      notifyListeners();
+      _pushNow();
       return;
     }
     final stamp = DateTime.tryParse(readString(row['updated_at'], ''));

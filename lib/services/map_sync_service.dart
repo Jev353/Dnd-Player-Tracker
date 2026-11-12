@@ -44,6 +44,62 @@ class MapSyncService {
         );
   }
 
+  /// Stable id for this install (Supabase anonymous user), or null when
+  /// cloud sync is unavailable.
+  String? get currentUserId =>
+      isCloudSyncConfigured ? _supabase.auth.currentUser?.id : null;
+
+  /// Tries to become the party's GM. Returns true if [clientId] now holds
+  /// the role (including when it already did), false if someone else does.
+  /// Requires the `gm_id text` column on `party_maps`.
+  Future<bool> claimGm(String partyCode, String clientId) async {
+    if (!isCloudSyncConfigured) return true;
+    final code = SyncService.normalizeRoom(partyCode);
+    final now = DateTime.now().toUtc().toIso8601String();
+    final row = await _supabase
+        .from('party_maps')
+        .select('gm_id')
+        .eq('party_code', code)
+        .maybeSingle();
+    if (row == null) {
+      try {
+        await _supabase.from('party_maps').insert({
+          'party_code': code,
+          'gm_id': clientId,
+          'updated_at': now,
+        });
+        return true;
+      } on PostgrestException catch (e) {
+        if (e.code == '23505') return false; // Lost a race to another GM.
+        rethrow;
+      }
+    }
+    final current = row['gm_id'];
+    if (current == clientId) return true;
+    if (current != null) return false;
+    // Conditional update: only succeeds while the seat is still empty.
+    final updated = await _supabase
+        .from('party_maps')
+        .update({'gm_id': clientId, 'updated_at': now})
+        .eq('party_code', code)
+        .isFilter('gm_id', null)
+        .select();
+    return updated.isNotEmpty;
+  }
+
+  /// Gives up the GM role, but only if [clientId] actually holds it.
+  Future<void> releaseGm(String partyCode, String clientId) async {
+    if (!isCloudSyncConfigured) return;
+    await _supabase
+        .from('party_maps')
+        .update({
+          'gm_id': null,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('party_code', SyncService.normalizeRoom(partyCode))
+        .eq('gm_id', clientId);
+  }
+
   /// Uploads a local image to the public `map-images` bucket and returns its
   /// public URL, or null when cloud sync is not configured. Throws on
   /// Supabase errors (e.g. bucket missing).

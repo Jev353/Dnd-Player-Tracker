@@ -68,8 +68,17 @@ class _MapModalState extends State<MapModal> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  void _toggleRole(bool gm) {
-    _map.setPartySession(partyCode: _currentCode, isGM: gm);
+  Future<void> _toggleRole() async {
+    if (_map.isGM) {
+      await _map.releaseGm();
+      return;
+    }
+    final ok = await _map.requestGm();
+    if (!ok && mounted) {
+      _toast(
+        _map.syncError ?? 'Another player is already the GM for this party.',
+      );
+    }
   }
 
   void _dropMyCharacter() {
@@ -232,12 +241,19 @@ class _MapModalState extends State<MapModal> {
               avatar: Icon(_map.isGM ? Icons.shield : Icons.person, size: 16),
               label: Text(_map.isGM ? 'GM Mode' : 'Player Mode'),
             ),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('GM'),
-                Switch(value: _map.isGM, onChanged: _toggleRole),
-              ],
+            Tooltip(
+              message: _map.gmTaken
+                  ? 'Another player is already the GM for this party.'
+                  : '',
+              child: OutlinedButton.icon(
+                onPressed: _map.gmTaken ? null : _toggleRole,
+                icon: Icon(_map.isGM ? Icons.logout : Icons.shield_outlined),
+                label: Text(
+                  _map.isGM
+                      ? 'Release GM'
+                      : (_map.gmTaken ? 'GM taken' : 'Become GM'),
+                ),
+              ),
             ),
             FilledButton.icon(
               onPressed: _dropMyCharacter,
