@@ -112,7 +112,12 @@ class _MapCanvasState extends State<MapCanvas> {
     if (own) return false;
     final half = scene.gridSize * token.size / 2;
     final center = Offset(token.x + half, token.y + half);
-    for (final r in scene.revealedRects) {
+    final rects = scene.revealedRectsFor(
+      characterId: widget.currentCharacterId,
+      gmTargetCharacterId: widget.mapController.fogTargetCharacterId,
+      isGM: widget.mapController.isGM,
+    );
+    for (final r in rects) {
       // Revealed areas are drawn as ovals inscribed in their rects.
       final rx = r.width / 2;
       final ry = r.height / 2;
@@ -238,7 +243,11 @@ class _MapCanvasState extends State<MapCanvas> {
               child: IgnorePointer(
                 child: CustomPaint(
                   painter: FogOfWarPainter(
-                    revealedRects: scene.revealedRects,
+                    revealedRects: scene.revealedRectsFor(
+                      characterId: widget.currentCharacterId,
+                      gmTargetCharacterId: mc.fogTargetCharacterId,
+                      isGM: mc.isGM,
+                    ),
                     isGM: mc.isGM,
                   ),
                 ),
@@ -265,10 +274,8 @@ class _MapCanvasState extends State<MapCanvas> {
     );
   }
 
-  /// Reveals a circle under the brush. Radius scales with the grid so the
-  /// brush feels right on both small and large maps.
+  /// Reveals a circle under the brush using the GM's chosen brush size.
   void _reveal(Offset scenePosition) {
-    final radius = (widget.scene.gridSize * 2).clamp(60.0, 240.0).toDouble();
-    widget.mapController.revealArea(scenePosition, radius);
+    widget.mapController.revealArea(scenePosition);
   }
 }

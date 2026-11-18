@@ -392,12 +392,18 @@ class _MapModalState extends State<MapModal> {
     ];
   }
 
-  Future<void> _resetFog() async {
+  Future<void> _resetFog({required bool all}) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Reset Fog'),
-        content: const Text('Cover the whole map again for all players?'),
+        content: Text(
+          all
+              ? 'Cover the whole map again for all players?'
+              : _map.fogTargetCharacterId == null
+              ? 'Cover the global reveals again?'
+              : "Remove this player's private reveals?",
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -410,7 +416,33 @@ class _MapModalState extends State<MapModal> {
         ],
       ),
     );
-    if (ok == true) _map.resetFog();
+    if (ok != true) return;
+    if (all) {
+      _map.resetFog();
+    } else {
+      _map.resetTargetFog();
+    }
+  }
+
+  List<DropdownMenuItem<String?>> _revealTargetItems(MapScene scene) {
+    final names = <String, String>{};
+    for (final c in _chars.characters) {
+      names[c.id] = c.name;
+    }
+    for (final t in scene.tokens) {
+      final id = t.characterId;
+      if (id != null) names.putIfAbsent(id, () => t.label);
+    }
+    final current = _map.fogTargetCharacterId;
+    if (current != null) names.putIfAbsent(current, () => current);
+    return [
+      const DropdownMenuItem<String?>(
+        value: null,
+        child: Text('All Players (Global)'),
+      ),
+      for (final e in names.entries)
+        DropdownMenuItem<String?>(value: e.key, child: Text(e.value)),
+    ];
   }
 
   List<Widget> _fogControls(MapScene scene) => [
@@ -434,10 +466,46 @@ class _MapModalState extends State<MapModal> {
         selected: _revealMode,
         onSelected: (v) => setState(() => _revealMode = v),
       ),
+      Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('Reveal To: '),
+          DropdownButton<String?>(
+            value: _map.fogTargetCharacterId,
+            items: _revealTargetItems(scene),
+            onChanged: _map.setFogTargetCharacterId,
+          ),
+        ],
+      ),
+      SizedBox(
+        width: 260,
+        child: Row(
+          children: [
+            Text('Brush: ${_map.fogBrushRadius.round()}px'),
+            Expanded(
+              child: Slider(
+                min: MapController.minFogBrushRadius,
+                max: MapController.maxFogBrushRadius,
+                value: _map.fogBrushRadius,
+                onChanged: _map.setFogBrushRadius,
+              ),
+            ),
+          ],
+        ),
+      ),
       OutlinedButton.icon(
-        onPressed: _resetFog,
+        onPressed: () => _resetFog(all: false),
         icon: const Icon(Icons.cloud),
-        label: const Text('Reset Fog'),
+        label: Text(
+          _map.fogTargetCharacterId == null
+              ? 'Reset Global Fog'
+              : 'Reset Player Fog',
+        ),
+      ),
+      OutlinedButton.icon(
+        onPressed: () => _resetFog(all: true),
+        icon: const Icon(Icons.cloud_off),
+        label: const Text('Reset All Fog'),
       ),
     ],
   ];

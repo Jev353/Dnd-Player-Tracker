@@ -20,6 +20,7 @@ class MapScene {
     this.activeLayerId = baseLayerId,
     this.fogEnabled = false,
     List<Rect>? revealedRects,
+    this.playerRevealedRects = const {},
   }) : id = id ?? newId(),
        revealedRects = revealedRects ?? [],
        layers = layers ?? [],
@@ -54,6 +55,37 @@ class MapScene {
   /// Areas the GM has revealed, in scene coordinates. Each rect is drawn as
   /// an oval, so square rects from the brush appear as circles.
   final List<Rect> revealedRects;
+
+  /// Areas revealed only to one player, keyed by characterId.
+  final Map<String, List<Rect>> playerRevealedRects;
+
+  /// Rects visible to a viewer: global reveals plus the relevant player's.
+  List<Rect> revealedRectsFor({
+    String? characterId,
+    String? gmTargetCharacterId,
+    required bool isGM,
+  }) {
+    final key = isGM ? gmTargetCharacterId : characterId;
+    if (key == null) return revealedRects;
+    return [...revealedRects, ...(playerRevealedRects[key] ?? const <Rect>[])];
+  }
+
+  static Rect _rectFrom(dynamic r) {
+    final m = readMap(r);
+    return Rect.fromLTRB(
+      readDouble(m['l'], 0),
+      readDouble(m['t'], 0),
+      readDouble(m['r'], 0),
+      readDouble(m['b'], 0),
+    );
+  }
+
+  static Map<String, double> _rectToJson(Rect r) => {
+    'l': r.left,
+    't': r.top,
+    'r': r.right,
+    'b': r.bottom,
+  };
 
   bool hasLayer(String layerId) =>
       layerId == baseLayerId || layers.any((l) => l.id == layerId);
@@ -101,15 +133,11 @@ class MapScene {
       ).map((l) => MapLayer.fromJson(readMap(l))).toList(),
       activeLayerId: readString(json['activeLayerId'], baseLayerId),
       fogEnabled: readBool(json['fogEnabled'], false),
-      revealedRects: readList(json['revealedRects']).map((r) {
-        final m = readMap(r);
-        return Rect.fromLTRB(
-          readDouble(m['l'], 0),
-          readDouble(m['t'], 0),
-          readDouble(m['r'], 0),
-          readDouble(m['b'], 0),
-        );
-      }).toList(),
+      revealedRects: readList(json['revealedRects']).map(_rectFrom).toList(),
+      playerRevealedRects: {
+        for (final e in readMap(json['playerRevealedRects']).entries)
+          e.key.toString(): readList(e.value).map(_rectFrom).toList(),
+      },
     );
   }
 
@@ -127,9 +155,11 @@ class MapScene {
     'layers': layers.map((l) => l.toJson()).toList(),
     'activeLayerId': activeLayerId,
     'fogEnabled': fogEnabled,
-    'revealedRects': revealedRects
-        .map((r) => {'l': r.left, 't': r.top, 'r': r.right, 'b': r.bottom})
-        .toList(),
+    'revealedRects': revealedRects.map(_rectToJson).toList(),
+    'playerRevealedRects': {
+      for (final e in playerRevealedRects.entries)
+        e.key: e.value.map(_rectToJson).toList(),
+    },
   };
 
   MapScene copyWith({
@@ -145,6 +175,7 @@ class MapScene {
     String? activeLayerId,
     bool? fogEnabled,
     List<Rect>? revealedRects,
+    Map<String, List<Rect>>? playerRevealedRects,
   }) => MapScene(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -158,5 +189,6 @@ class MapScene {
     activeLayerId: activeLayerId ?? this.activeLayerId,
     fogEnabled: fogEnabled ?? this.fogEnabled,
     revealedRects: revealedRects ?? this.revealedRects,
+    playerRevealedRects: playerRevealedRects ?? this.playerRevealedRects,
   );
 }

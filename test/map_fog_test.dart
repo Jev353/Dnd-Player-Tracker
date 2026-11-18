@@ -107,6 +107,83 @@ void main() {
     expect(mc.activeScene!.revealedRects, isNotEmpty);
   });
 
+  MapController gmController() {
+    final mc = MapController();
+    mc.setPartySession(partyCode: MapController.localPartyCode, isGM: true);
+    mc.addScene(MapScene(name: 'Test'));
+    mc.setFogEnabled(true);
+    return mc;
+  }
+
+  test('brush radius changes the revealed rect size and is clamped', () {
+    final mc = gmController();
+    mc.setFogBrushRadius(30);
+    mc.revealArea(const Offset(100, 100));
+    mc.endReveal();
+    expect(mc.activeScene!.revealedRects.last.width, 60);
+    mc.setFogBrushRadius(120);
+    mc.revealArea(const Offset(500, 500));
+    expect(mc.activeScene!.revealedRects.last.width, 240);
+    mc.setFogBrushRadius(1);
+    expect(mc.fogBrushRadius, 15);
+    mc.setFogBrushRadius(9999);
+    expect(mc.fogBrushRadius, 250);
+  });
+
+  test('global vs player-specific fog', () {
+    final mc = gmController();
+    mc.revealArea(const Offset(100, 100), 50);
+    mc.endReveal();
+    mc.setFogTargetCharacterId('char_1');
+    mc.revealArea(const Offset(500, 500), 40);
+    mc.endReveal();
+    mc.setFogTargetCharacterId('char_2');
+    mc.revealArea(const Offset(900, 900), 30);
+    mc.endReveal();
+
+    final s = mc.activeScene!;
+    expect(s.revealedRects, hasLength(1));
+    expect(s.playerRevealedRects['char_1'], hasLength(1));
+    expect(s.playerRevealedRects['char_2'], hasLength(1));
+
+    final one = s.revealedRectsFor(characterId: 'char_1', isGM: false);
+    expect(one, [...s.revealedRects, ...s.playerRevealedRects['char_1']!]);
+    final two = s.revealedRectsFor(characterId: 'char_2', isGM: false);
+    expect(two, [...s.revealedRects, ...s.playerRevealedRects['char_2']!]);
+    expect(two.any(s.playerRevealedRects['char_1']!.contains), isFalse);
+    expect(s.revealedRectsFor(characterId: null, isGM: false), s.revealedRects);
+    expect(
+      s.revealedRectsFor(gmTargetCharacterId: 'char_1', isGM: true),
+      one,
+    );
+    expect(s.revealedRectsFor(isGM: true), s.revealedRects);
+
+    mc.setFogTargetCharacterId('char_1');
+    mc.resetTargetFog();
+    expect(mc.activeScene!.playerRevealedRects.containsKey('char_1'), isFalse);
+    expect(mc.activeScene!.playerRevealedRects['char_2'], isNotEmpty);
+    mc.resetFog();
+    expect(mc.activeScene!.revealedRects, isEmpty);
+    expect(mc.activeScene!.playerRevealedRects, isEmpty);
+  });
+
+  test('JSON round trip keeps player reveals; old JSON still loads', () {
+    final scene = MapScene(
+      revealedRects: [const Rect.fromLTRB(1, 2, 3, 4)],
+      playerRevealedRects: {
+        'char_1': [const Rect.fromLTRB(5, 6, 7, 8)],
+      },
+    );
+    final back = MapScene.fromJson(scene.toJson());
+    expect(back.revealedRects, scene.revealedRects);
+    expect(back.playerRevealedRects, scene.playerRevealedRects);
+
+    final json = scene.toJson()..remove('playerRevealedRects');
+    expect(MapScene.fromJson(json).playerRevealedRects, isEmpty);
+    json['playerRevealedRects'] = null;
+    expect(MapScene.fromJson(json).playerRevealedRects, isEmpty);
+  });
+
   for (final gm in [true, false]) {
     testWidgets('map canvas renders with fog (gm=$gm)', (tester) async {
       final mc = MapController();

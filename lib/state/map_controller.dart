@@ -677,19 +677,70 @@ class MapController extends ChangeNotifier {
 
   /// Reveals a circle of [radius] around [center] (scene coordinates).
   /// Pushes are throttled while brushing; finish with [endReveal].
-  void revealArea(Offset center, double radius) {
+  void revealArea(Offset center, [double? radius]) {
     if (!isGM) return;
     final scene = activeScene;
     if (scene == null || !scene.fogEnabled) return;
+    final r = radius ?? fogBrushRadius;
     // Skip near-duplicates so a long drag does not create thousands of rects.
     final last = _lastReveal;
-    if (last != null && (center - last).distance < radius * 0.35) return;
+    if (last != null && (center - last).distance < r * 0.35) return;
     _lastReveal = center;
-    final rect = Rect.fromCircle(center: center, radius: radius);
-    _replaceActive(
-      scene.copyWith(revealedRects: [...scene.revealedRects, rect]),
-    );
+    final rect = Rect.fromCircle(center: center, radius: r);
+    final target = fogTargetCharacterId;
+    if (target == null) {
+      _replaceActive(
+        scene.copyWith(revealedRects: [...scene.revealedRects, rect]),
+      );
+    } else {
+      _replaceActive(
+        scene.copyWith(
+          playerRevealedRects: {
+            ...scene.playerRevealedRects,
+            target: [...(scene.playerRevealedRects[target] ?? const []), rect],
+          },
+        ),
+      );
+    }
     _schedulePush();
+  }
+
+  static const double minFogBrushRadius = 15.0;
+  static const double maxFogBrushRadius = 250.0;
+
+  /// Radius of the reveal brush (scene units).
+  double fogBrushRadius = 60.0;
+
+  /// null = Global (all players); otherwise the characterId revealed to.
+  String? fogTargetCharacterId;
+
+  void setFogBrushRadius(double radius) {
+    fogBrushRadius = radius.clamp(minFogBrushRadius, maxFogBrushRadius);
+    notifyListeners();
+  }
+
+  void setFogTargetCharacterId(String? characterId) {
+    fogTargetCharacterId = characterId;
+    notifyListeners();
+  }
+
+  /// Covers the map again for the selected target only: the target player's
+  /// private reveals, or the global reveals when no player is selected.
+  void resetTargetFog() {
+    if (!isGM) return;
+    final scene = activeScene;
+    if (scene == null) return;
+    final target = fogTargetCharacterId;
+    if (target == null) {
+      _replaceActive(scene.copyWith(revealedRects: const []));
+    } else {
+      _replaceActive(
+        scene.copyWith(
+          playerRevealedRects: {...scene.playerRevealedRects}..remove(target),
+        ),
+      );
+    }
+    _pushNow();
   }
 
   /// Ends a brush stroke and pushes the final fog state immediately.
@@ -704,7 +755,9 @@ class MapController extends ChangeNotifier {
     if (!isGM) return;
     final scene = activeScene;
     if (scene == null) return;
-    _replaceActive(scene.copyWith(revealedRects: const []));
+    _replaceActive(
+      scene.copyWith(revealedRects: const [], playerRevealedRects: const {}),
+    );
     _pushNow();
   }
 
