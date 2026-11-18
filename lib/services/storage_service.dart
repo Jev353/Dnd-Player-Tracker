@@ -118,6 +118,48 @@ class StorageService {
     return c;
   }
 
+  /// Map state lives in a `maps` subfolder (ignored by [loadAll]).
+  Future<File> _mapsFile(String partyCode) async {
+    final dir = await charactersDir;
+    final mapsDir = Directory('${dir.path}${Platform.pathSeparator}maps');
+    if (!await mapsDir.exists()) await mapsDir.create(recursive: true);
+    return File(
+      '${mapsDir.path}${Platform.pathSeparator}${_safeId(partyCode)}.json',
+    );
+  }
+
+  /// Persists the map document (scenes + active scene) for [partyCode].
+  Future<void> saveMaps(
+    String partyCode,
+    String? activeSceneId,
+    List<Map<String, dynamic>> scenes,
+  ) async {
+    final file = await _mapsFile(partyCode);
+    final tmp = File('${file.path}.tmp');
+    await tmp.writeAsString(
+      jsonEncode({'active_scene_id': activeSceneId, 'scenes': scenes}),
+      flush: true,
+    );
+    try {
+      await tmp.rename(file.path);
+    } on FileSystemException {
+      if (await file.exists()) await file.delete();
+      await tmp.rename(file.path);
+    }
+  }
+
+  /// Loads the saved map document for [partyCode], or null.
+  Future<Map<String, dynamic>?> loadMaps(String partyCode) async {
+    try {
+      final file = await _mapsFile(partyCode);
+      if (!await file.exists()) return null;
+      final decoded = jsonDecode(await file.readAsString());
+      return decoded is Map ? decoded.cast<String, dynamic>() : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> exportTo(Character character, String path) async {
     final target = path.toLowerCase().endsWith('.json') ? path : '$path.json';
     final content = const JsonEncoder.withIndent(

@@ -88,6 +88,17 @@ class MapSyncService {
         );
   }
 
+  /// Fetches the party's map row once, or null if none / not configured.
+  Future<Map<String, dynamic>?> fetchPartyMap(String partyCode) async {
+    if (!isCloudSyncConfigured) return null;
+    final row = await _supabase
+        .from('party_maps')
+        .select()
+        .eq('party_code', SyncService.normalizeRoom(partyCode))
+        .maybeSingle();
+    return row == null ? null : readMap(row);
+  }
+
   /// Stable id for this install (Supabase anonymous user), or null when
   /// cloud sync is unavailable.
   String? get currentUserId =>
@@ -96,7 +107,12 @@ class MapSyncService {
   /// Tries to become the party's GM. Returns true if [clientId] now holds
   /// the role (including when it already did), false if someone else does.
   /// Requires the `gm_id text` column on `party_maps`.
-  Future<bool> claimGm(String partyCode, String clientId) async {
+  Future<bool> claimGm(
+    String partyCode,
+    String clientId, {
+    String? activeSceneId,
+    List<MapScene>? scenes,
+  }) async {
     if (!isCloudSyncConfigured) return true;
     final code = SyncService.normalizeRoom(partyCode);
     final now = DateTime.now().toUtc().toIso8601String();
@@ -110,6 +126,10 @@ class MapSyncService {
         await _supabase.from('party_maps').insert({
           'party_code': code,
           'gm_id': clientId,
+          'active_scene_id': activeSceneId,
+          'scenes': (scenes ?? const <MapScene>[])
+              .map((s) => s.toJson())
+              .toList(),
           'updated_at': now,
         });
         return true;
@@ -132,12 +152,21 @@ class MapSyncService {
   }
 
   /// Gives up the GM role, but only if [clientId] actually holds it.
-  Future<void> releaseGm(String partyCode, String clientId) async {
+  Future<void> releaseGm(
+    String partyCode,
+    String clientId, {
+    String? activeSceneId,
+    List<MapScene>? scenes,
+  }) async {
     if (!isCloudSyncConfigured) return;
     await _supabase
         .from('party_maps')
         .update({
           'gm_id': null,
+          if (scenes != null) ...{
+            'active_scene_id': activeSceneId,
+            'scenes': scenes.map((s) => s.toJson()).toList(),
+          },
           'updated_at': DateTime.now().toUtc().toIso8601String(),
         })
         .eq('party_code', SyncService.normalizeRoom(partyCode))

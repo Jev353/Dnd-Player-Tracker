@@ -11,6 +11,7 @@ import '../models/map_layer.dart';
 import '../models/map_scene.dart';
 import '../models/map_token.dart';
 import '../services/map_sync_service.dart';
+import '../services/storage_service.dart';
 
 /// Holds the party's map scenes, the active scene, and token permissions.
 /// When a real party code is set, state is mirrored through Supabase.
@@ -18,7 +19,45 @@ class MapController extends ChangeNotifier {
   MapController({
     MapSyncService? syncService,
     this.dragPushInterval = const Duration(milliseconds: 100),
-  }) : _sync = syncService ?? MapSyncService();
+    StorageService? storage,
+  }) : _sync = syncService ?? MapSyncService(),
+       _storage = storage;
+
+  final StorageService? _storage;
+
+  /// Saves scenes + active scene locally (per party code) after changes.
+  @override
+  void notifyListeners() {
+    super.notifyListeners();
+    final storage = _storage;
+    final code = partyCode;
+    if (storage == null || code == null || _disposed) return;
+    if (_scenes.isEmpty) return; // Never overwrite a saved map with nothing.
+    storage
+        .saveMaps(code, activeSceneId, _scenes.map((s) => s.toJson()).toList())
+        .catchError((Object e) => debugPrint('saveMaps failed: $e'));
+  }
+
+  /// Loads locally saved scenes for the current party code if we have none.
+  Future<void> _hydrateLocal() async {
+    final storage = _storage;
+    final code = partyCode;
+    if (storage == null || code == null) return;
+    final doc = await storage.loadMaps(code);
+    if (doc == null || _disposed || partyCode != code || _scenes.isNotEmpty) {
+      return;
+    }
+    final loaded = readList(
+      doc['scenes'],
+    ).map((s) => MapScene.fromJson(readMap(s))).toList();
+    if (loaded.isEmpty) return;
+    _scenes.addAll(loaded);
+    final a = doc['active_scene_id'];
+    final id = a == null ? null : readString(a, '');
+    activeSceneId = _sceneById(id) != null ? id : _scenes.first.id;
+    if (isGM) _restoreGmView();
+    notifyListeners();
+  }
 
   /// Party code used when not connected to a room (never synced).
   static const String localPartyCode = 'LOCAL';
@@ -91,6 +130,7 @@ class MapController extends ChangeNotifier {
       viewedSceneId = null;
       viewedLayerId = null;
       _restartSubscription();
+      _hydrateLocal();
     } else if (!isSynced) {
       this.isGM = isGM;
     }
@@ -111,10 +151,31 @@ class MapController extends ChangeNotifier {
     // and that echo must already be treated as coming from the GM.
     isGM = true;
     try {
-      final ok = await _sync.claimGm(code, clientId);
+      final ok = await _sync.claimGm(
+        code,
+        clientId,
+        activeSceneId: activeSceneId ?? viewedSceneId,
+        scenes: List<MapScene>.of(_scenes),
+      );
       if (ok) {
         gmId = clientId;
         syncError = null;
+        final remote = await _sync.fetchPartyMap(code);
+        if (remote != null) {
+          final remoteScenes = readList(remote['scenes']);
+          if (remoteScenes.isNotEmpty && _scenes.isEmpty) {
+            _scenes.addAll(
+              remoteScenes.map((s) => MapScene.fromJson(readMap(s))),
+            );
+            final ra = remote['active_scene_id'];
+            final raId = ra == null ? null : readString(ra, '');
+            activeSceneId = _sceneById(raId) != null ? raId : _scenes.first.id;
+          } else if (remoteScenes.isEmpty && _scenes.isNotEmpty) {
+            await _pushNow();
+          }
+        } else if (_scenes.isNotEmpty) {
+          await _pushNow();
+        }
         _restoreGmView();
         notifyListeners();
         await uploadLocalImages();
@@ -145,15 +206,28 @@ class MapController extends ChangeNotifier {
   /// party scene, then the first scene.
   void _restoreGmView() {
     if (_sceneById(viewedSceneId) != null) return;
-    viewedSceneId =
-        partyScene?.id ?? (_scenes.isEmpty ? null : _scenes.first.id);
+    viewedSceneId = activeSceneId != null && partyScene != null
+        ? activeSceneId
+        : (_scenes.isEmpty ? null : _scenes.first.id);
     viewedLayerId = null;
+    if (_sceneById(activeSceneId) == null && _scenes.isNotEmpty) {
+      activeSceneId = viewedSceneId;
+      _pushNow();
+    }
   }
 
   /// Gives up the GM seat so another player can take it.
   Future<void> releaseGm() async {
     final code = partyCode;
     final wasGm = isGM;
+    if (wasGm && activeSceneId == null && _scenes.isNotEmpty) {
+      activeSceneId = viewedSceneId ?? _scenes.first.id;
+    }
+    if (wasGm && code != null && isSynced) {
+      _pushTimer?.cancel();
+      _pushTimer = null;
+      await _pushNow();
+    }
     isGM = false;
     viewedSceneId = null;
     viewedLayerId = null;
@@ -166,7 +240,12 @@ class MapController extends ChangeNotifier {
 
   Future<void> _releaseGm(String code) async {
     try {
-      await _sync.releaseGm(code, clientId);
+      await _sync.releaseGm(
+        code,
+        clientId,
+        activeSceneId: activeSceneId,
+        scenes: List<MapScene>.of(_scenes),
+      );
     } catch (e) {
       debugPrint('releaseGm failed: $e');
     }
@@ -288,9 +367,15 @@ class MapController extends ChangeNotifier {
     // empty remote list means "not uploaded yet": keep ours and upload it
     // instead of wiping the GM's maps.
     final remoteScenes = readList(row['scenes']);
-    if (isGM && remoteScenes.isEmpty && _scenes.isNotEmpty) {
-      notifyListeners();
-      _pushNow();
+    if (remoteScenes.isEmpty && _scenes.isNotEmpty) {
+      // Never wipe local maps with an empty remote list.
+      if (isGM) {
+        _restoreGmView();
+        notifyListeners();
+        _pushNow();
+      } else {
+        notifyListeners();
+      }
       return;
     }
     final stamp = DateTime.tryParse(readString(row['updated_at'], ''));
@@ -313,7 +398,16 @@ class MapController extends ChangeNotifier {
     // Players are locked to the GM's scene; the GM keeps their own view.
     final localStillValid =
         activeSceneId != null && _scenes.any((s) => s.id == activeSceneId);
-    if (!isGM || !localStillValid) activeSceneId = remoteActiveId;
+    final remoteValid =
+        remoteActiveId != null && _scenes.any((s) => s.id == remoteActiveId);
+    if (!isGM || !localStillValid) {
+      if (remoteValid || _scenes.isEmpty) {
+        activeSceneId = remoteActiveId;
+      } else if (!localStillValid) {
+        activeSceneId = _scenes.first.id;
+      }
+    }
+    if (isGM && _sceneById(viewedSceneId) == null) _restoreGmView();
     syncError = null;
     notifyListeners();
   }
@@ -457,6 +551,7 @@ class MapController extends ChangeNotifier {
   void addScene(MapScene scene) {
     if (!isGM) return;
     _scenes.add(scene);
+    activeSceneId ??= scene.id;
     viewedLayerId = null;
     viewedSceneId = scene.id;
     notifyListeners();

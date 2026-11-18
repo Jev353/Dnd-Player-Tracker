@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../services/storage_service.dart';
 import '../state/character_controller.dart';
 import '../state/map_controller.dart';
 import 'widgets/dice_roll_toast_overlay.dart';
@@ -22,7 +23,8 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  late final MapController _map = widget.mapController ?? MapController();
+  late final MapController _map =
+      widget.mapController ?? MapController(storage: StorageService());
 
   CharacterController get ctrl => widget.ctrl;
 
