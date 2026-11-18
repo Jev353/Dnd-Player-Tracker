@@ -38,18 +38,43 @@ class StorageService {
     final chars = await charactersDir;
     final base = _overrideDirectory != null ? chars : chars.parent;
     final file = File('${base.path}${Platform.pathSeparator}client_id.txt');
+    final lockFile = File('${base.path}${Platform.pathSeparator}client_id.lock');
+
+    // Hold an exclusive lock for the lifetime of the process. If another
+    // running instance already holds it, we must NOT share its client id.
+    var locked = false;
+    try {
+      final raf = await lockFile.open(mode: FileMode.write);
+      try {
+        await raf.lock(FileLock.exclusive);
+        _clientIdLock = raf; // Never closed: released when the process exits.
+        locked = true;
+      } catch (_) {
+        await raf.close();
+      }
+    } catch (_) {}
+    if (!locked) return _freshClientId();
+
     try {
       if (await file.exists()) {
         final existing = (await file.readAsString()).trim();
         if (existing.isNotEmpty) return existing;
       }
     } catch (_) {}
-    final rnd = Random.secure().nextInt(1 << 32).toRadixString(16);
-    final id = '${newId()}-$rnd';
+    final id = _freshClientId();
     try {
       await file.writeAsString(id, flush: true);
     } catch (_) {}
     return id;
+  }
+
+  /// Held open (and locked) for the process lifetime; see [loadOrCreateClientId].
+  // ignore: unused_field
+  static RandomAccessFile? _clientIdLock;
+
+  static String _freshClientId() {
+    final rnd = Random.secure().nextInt(1 << 32).toRadixString(16);
+    return '${newId()}-$rnd';
   }
 
   String _safeId(String id) => id.replaceAll(RegExp(r'[^A-Za-z0-9_\-]'), '_');

@@ -108,10 +108,9 @@ class MapSyncService {
   /// the role (including when it already did), false if someone else does.
   /// Requires the `gm_id text` column on `party_maps`.
   ///
-  /// A seat held by another client is only taken over when its `updated_at`
-  /// heartbeat is older than [staleGmTimeout] (a GM who crashed or vanished).
-  /// [force] is the explicit "claim stale seat" request; it still requires
-  /// staleness so an active GM can't be hijacked.
+  /// A normal claim ([force] false) NEVER overwrites an existing GM: there
+  /// is no time-based takeover (clock skew would make it unsafe). Only
+  /// [force] (the hidden DM takeover) replaces the current GM.
   Future<bool> claimGm(
     String partyCode,
     String clientId, {
@@ -122,43 +121,26 @@ class MapSyncService {
     if (!isCloudSyncConfigured) return true;
     final code = SyncService.normalizeRoom(partyCode);
     final now = DateTime.now().toUtc().toIso8601String();
-    final row = await _supabase
-        .from('party_maps')
-        .select('gm_id, updated_at')
-        .eq('party_code', code)
-        .maybeSingle();
-    if (row == null) {
-      try {
-        await _supabase.from('party_maps').insert({
-          'party_code': code,
-          'gm_id': clientId,
-          'active_scene_id': activeSceneId,
-          'scenes': (scenes ?? const <MapScene>[])
-              .map((s) => s.toJson())
-              .toList(),
-          'updated_at': now,
-        });
-        return true;
-      } on PostgrestException catch (e) {
-        if (e.code == '23505') return false; // Lost a race to another GM.
-        rethrow;
-      }
-    }
-    final current = row['gm_id'];
-    if (current == clientId) return true;
-    if (current != null) {
-      final stamp = DateTime.tryParse(readString(row['updated_at'], ''));
-      if (!isStale(stamp)) return false;
-      // Conditional update: only succeeds if the seat is still held by the
-      // same stale GM.
-      final taken = await _supabase
+    if (force) {
+      final updated = await _supabase
           .from('party_maps')
           .update({'gm_id': clientId, 'updated_at': now})
           .eq('party_code', code)
-          .eq('gm_id', current)
           .select();
-      return taken.isNotEmpty;
+      if (updated.isNotEmpty) return true;
+      return _insertRow(code, clientId, activeSceneId, scenes, now);
     }
+    final row = await _supabase
+        .from('party_maps')
+        .select('gm_id')
+        .eq('party_code', code)
+        .maybeSingle();
+    if (row == null) {
+      return _insertRow(code, clientId, activeSceneId, scenes, now);
+    }
+    final current = row['gm_id'];
+    if (current == clientId) return true;
+    if (current != null) return false;
     // Conditional update: only succeeds while the seat is still empty.
     final updated = await _supabase
         .from('party_maps')
@@ -169,42 +151,41 @@ class MapSyncService {
     return updated.isNotEmpty;
   }
 
-  /// Unconditionally takes the GM seat, even from an active GM. Existing
-  /// scenes / ctive_scene_id are left untouched when a row exists.
+  Future<bool> _insertRow(
+    String code,
+    String clientId,
+    String? activeSceneId,
+    List<MapScene>? scenes,
+    String now,
+  ) async {
+    try {
+      await _supabase.from('party_maps').insert({
+        'party_code': code,
+        'gm_id': clientId,
+        'active_scene_id': activeSceneId,
+        'scenes': (scenes ?? const <MapScene>[]).map((s) => s.toJson()).toList(),
+        'updated_at': now,
+      });
+      return true;
+    } on PostgrestException catch (e) {
+      if (e.code == '23505') return false; // Lost a race to another GM.
+      rethrow;
+    }
+  }
+
+  /// Unconditionally takes the GM seat (hidden DM override).
   Future<bool> forceClaimGm(
     String partyCode,
     String clientId, {
     String? activeSceneId,
     List<MapScene>? scenes,
-  }) async {
-    if (!isCloudSyncConfigured) return true;
-    final code = SyncService.normalizeRoom(partyCode);
-    final now = DateTime.now().toUtc().toIso8601String();
-    final updated = await _supabase
-        .from('party_maps')
-        .update({'gm_id': clientId, 'updated_at': now})
-        .eq('party_code', code)
-        .select();
-    if (updated.isNotEmpty) return true;
-    await _supabase.from('party_maps').upsert({
-      'party_code': code,
-      'gm_id': clientId,
-      'active_scene_id': activeSceneId,
-      'scenes': (scenes ?? const <MapScene>[]).map((s) => s.toJson()).toList(),
-      'updated_at': now,
-    });
-    return true;
-  }
-
-  /// A GM seat is stale when its heartbeat is older than this.
-  static const Duration staleGmTimeout = Duration(minutes: 2);
-
-  /// True if [updatedAt] is missing or older than [staleGmTimeout].
-  static bool isStale(DateTime? updatedAt, {DateTime? now}) =>
-      updatedAt == null ||
-      (now ?? DateTime.now().toUtc()).difference(updatedAt.toUtc()) >
-          staleGmTimeout;
-
+  }) => claimGm(
+    partyCode,
+    clientId,
+    force: true,
+    activeSceneId: activeSceneId,
+    scenes: scenes,
+  );
   /// Refreshes `updated_at` so an active GM's seat is never stale.
   Future<void> touchGmHeartbeat(
     String partyCode,

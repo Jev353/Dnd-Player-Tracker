@@ -77,12 +77,19 @@ class FakeMapSync extends MapSyncService {
     String? activeSceneId,
     List<MapScene>? scenes,
   }) async {
-    final holder = row?['gm_id'];
-    if (row != null && holder != null && holder != clientId) {
-      final stamp = DateTime.tryParse('${row!['updated_at']}');
-      if (!MapSyncService.isStale(stamp)) return false;
-      row!['gm_id'] = clientId;
-      row!['updated_at'] = DateTime.now().toUtc().toIso8601String();
+    if (force) {
+      if (row == null) {
+        row = {
+          'party_code': partyCode,
+          'gm_id': clientId,
+          'active_scene_id': activeSceneId,
+          'scenes': (scenes ?? const <MapScene>[]).map((s) => s.toJson()).toList(),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        };
+      } else {
+        row!['gm_id'] = clientId;
+        row!['updated_at'] = DateTime.now().toUtc().toIso8601String();
+      }
       db.emit();
       return true;
     }
@@ -91,21 +98,18 @@ class FakeMapSync extends MapSyncService {
         'party_code': partyCode,
         'gm_id': clientId,
         'active_scene_id': activeSceneId,
-        'scenes': (scenes ?? const <MapScene>[])
-            .map((s) => s.toJson())
-            .toList(),
+        'scenes': (scenes ?? const <MapScene>[]).map((s) => s.toJson()).toList(),
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       };
-    } else if (row!['gm_id'] == null || row!['gm_id'] == clientId) {
+    } else if (row!['gm_id'] == null) {
       row!['gm_id'] = clientId;
       row!['updated_at'] = DateTime.now().toUtc().toIso8601String();
     } else {
-      return false;
+      return row!['gm_id'] == clientId;
     }
     db.emit();
     return true;
   }
-
   @override
   Future<bool> forceClaimGm(
     String partyCode,
@@ -143,6 +147,30 @@ class FakeMapSync extends MapSyncService {
       row!['updated_at'] = DateTime.now().toUtc().toIso8601String();
       db.emit();
     }
+  }
+}
+
+class _SlowReleaseSync extends FakeMapSync {
+  _SlowReleaseSync({required FakeDb db, required this.onReleasing})
+    : super(db: db);
+
+  final void Function() onReleasing;
+
+  @override
+  Future<void> releaseGm(
+    String partyCode,
+    String clientId, {
+    String? activeSceneId,
+    List<MapScene>? scenes,
+  }) async {
+    onReleasing();
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    await super.releaseGm(
+      partyCode,
+      clientId,
+      activeSceneId: activeSceneId,
+      scenes: scenes,
+    );
   }
 }
 
@@ -298,38 +326,75 @@ void main() {
     second.dispose();
   });
 
-  test('stale GM seat can be taken over, fresh one cannot', () async {
+  test('strict single-GM: normal claim never displaces an active GM', () async {
     final db = FakeDb();
-    final a = MapController(
-      syncService: FakeMapSync(db: db),
-      clientId: 'A',
-    );
-    final b = MapController(
-      syncService: FakeMapSync(db: db),
-      clientId: 'B',
-    );
+    final a = MapController(syncService: FakeMapSync(db: db), clientId: 'A');
+    final b = MapController(syncService: FakeMapSync(db: db), clientId: 'B');
     a.setPartySession(partyCode: 'ABCD', isGM: false);
     b.setPartySession(partyCode: 'ABCD', isGM: false);
     await settle();
     expect(await a.requestGm(), isTrue);
     await settle();
-
-    expect(await b.requestGm(force: true), isFalse, reason: 'A is active');
-    expect(b.isGM, isFalse);
-
+    // Even a very old heartbeat must not allow a normal takeover.
     db.row!['updated_at'] = DateTime.now()
         .toUtc()
-        .subtract(const Duration(minutes: 3))
+        .subtract(const Duration(hours: 1))
         .toIso8601String();
-    expect(await b.requestGm(force: true), isTrue);
+    expect(await b.requestGm(), isFalse);
     await settle();
-    expect(db.row!['gm_id'], 'B');
-    expect(b.isGM, isTrue);
-    expect(a.isGM, isFalse);
+    expect(b.isGM, isFalse);
+    expect(b.gmTaken, isTrue);
+    expect(a.isGM, isTrue);
+    expect(db.row!['gm_id'], 'A');
     a.dispose();
     b.dispose();
   });
 
+  test('force takeover demotes previous GM immediately', () async {
+    final db = FakeDb();
+    final a = MapController(syncService: FakeMapSync(db: db), clientId: 'A');
+    final b = MapController(syncService: FakeMapSync(db: db), clientId: 'B');
+    a.setPartySession(partyCode: 'ABCD', isGM: false);
+    b.setPartySession(partyCode: 'ABCD', isGM: false);
+    await settle();
+    expect(await a.requestGm(), isTrue);
+    a.addScene(MapScene(name: 'World'));
+    await settle();
+    var notified = 0;
+    a.addListener(() => notified++);
+
+    expect(await b.requestGm(force: true), isTrue);
+    await settle();
+    expect(b.isGM, isTrue);
+    expect(a.isGM, isFalse);
+    expect(a.gmTaken, isTrue);
+    expect(notified, greaterThan(0));
+    expect(db.row!['gm_id'], 'B');
+    a.dispose();
+    b.dispose();
+  });
+
+  test('releasing GM is not undone by a stale stream echo', () async {
+    final db = FakeDb();
+    late FakeMapSync syncA;
+    syncA = _SlowReleaseSync(db: db, onReleasing: () {
+      // In-flight echo still carrying the old gm_id.
+      db.emit();
+    });
+    final a = MapController(syncService: syncA, clientId: 'A');
+    a.setPartySession(partyCode: 'ABCD', isGM: false);
+    await settle();
+    expect(await a.requestGm(), isTrue);
+    await settle();
+    a.addScene(MapScene(name: 'World'));
+    await settle();
+
+    await a.releaseGm();
+    await settle();
+    expect(a.isGM, isFalse);
+    expect(db.row!['gm_id'], isNull);
+    a.dispose();
+  });
   test('empty remote row does not wipe local scenes', () async {
     final fake = FakeMapSync();
     final mc = MapController(syncService: fake);

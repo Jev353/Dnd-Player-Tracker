@@ -34,10 +34,13 @@ class MapController extends ChangeNotifier {
   void _startHeartbeat() {
     _heartbeatTimer?.cancel();
     _heartbeatTimer = null;
-    if (!isGM || !isSynced || _disposed) return;
+    if (!isGM || !isSynced || _disposed || gmId != clientId) return;
     _heartbeatTimer = Timer.periodic(heartbeatInterval, (_) {
       final code = partyCode;
-      if (!isGM || code == null || !isSynced) return;
+      if (!isGM || code == null || !isSynced || gmId != clientId) {
+        _stopHeartbeat();
+        return;
+      }
       final stamp = DateTime.now().toUtc();
       _ownPushes.add(stamp.microsecondsSinceEpoch); // Ignore our own echo.
       if (_ownPushes.length > 64) _ownPushes.remove(_ownPushes.first);
@@ -48,6 +51,8 @@ class MapController extends ChangeNotifier {
       });
     });
   }
+
+  void _stopGmHeartbeat() => _stopHeartbeat();
 
   void _stopHeartbeat() {
     _heartbeatTimer?.cancel();
@@ -159,6 +164,7 @@ class MapController extends ChangeNotifier {
       _releaseGmQuietly();
       _stopHeartbeat();
       gmId = null;
+      _voluntarilyReleasedGm = false;
     }
     this.partyCode = partyCode;
     if (changed) {
@@ -180,11 +186,16 @@ class MapController extends ChangeNotifier {
   /// taken over (see [MapSyncService.staleGmTimeout]).
   Future<bool> requestGm({bool force = false}) => _claimGm(force: force);
 
+  /// True while a claim/release is in flight, so stale stream echoes can't
+  /// undo it.
+  bool _claimingOrReleasing = false;
+  bool _voluntarilyReleasedGm = false;
+
   /// Unconditionally takes the GM seat from whoever holds it (secret DM
   /// override). Scenes are preserved; the old GM demotes via the stream.
-  Future<bool> forceRequestGm() => _claimGm(takeover: true);
+  Future<bool> forceRequestGm() => _claimGm(force: true);
 
-  Future<bool> _claimGm({bool force = false, bool takeover = false}) async {
+  Future<bool> _claimGm({bool force = false}) async {
     final code = partyCode;
     if (code == null || !isSynced) {
       isGM = true;
@@ -194,22 +205,17 @@ class MapController extends ChangeNotifier {
     }
     // Optimistic: claiming writes a row that echoes back through the stream,
     // and that echo must already be treated as coming from the GM.
+    _voluntarilyReleasedGm = false;
+    _claimingOrReleasing = true;
     isGM = true;
     try {
-      final ok = takeover
-          ? await _sync.forceClaimGm(
-              code,
-              clientId,
-              activeSceneId: activeSceneId ?? viewedSceneId,
-              scenes: List<MapScene>.of(_scenes),
-            )
-          : await _sync.claimGm(
-              code,
-              clientId,
-              force: force,
-              activeSceneId: activeSceneId ?? viewedSceneId,
-              scenes: List<MapScene>.of(_scenes),
-            );
+      final ok = await _sync.claimGm(
+        code,
+        clientId,
+        force: force,
+        activeSceneId: activeSceneId ?? viewedSceneId,
+        scenes: List<MapScene>.of(_scenes),
+      );
       if (ok) {
         gmId = clientId;
         _startHeartbeat();
@@ -235,6 +241,7 @@ class MapController extends ChangeNotifier {
         await uploadLocalImages();
       } else {
         isGM = false;
+        _stopHeartbeat();
         // Refreshed from the stream shortly; mark taken in the meantime.
         gmId ??= '?';
       }
@@ -242,6 +249,7 @@ class MapController extends ChangeNotifier {
       return ok;
     } catch (e) {
       isGM = false;
+      _stopHeartbeat();
       debugPrint('claimGm failed: $e');
       final missingColumn =
           e is PostgrestException &&
@@ -252,6 +260,8 @@ class MapController extends ChangeNotifier {
           : 'Could not claim GM: $e';
       notifyListeners();
       return false;
+    } finally {
+      _claimingOrReleasing = false;
     }
   }
 
@@ -274,6 +284,8 @@ class MapController extends ChangeNotifier {
   Future<void> releaseGm() async {
     final code = partyCode;
     final wasGm = isGM;
+    _voluntarilyReleasedGm = true;
+    _claimingOrReleasing = true;
     _stopHeartbeat();
     if (wasGm && activeSceneId == null && _scenes.isNotEmpty) {
       activeSceneId = viewedSceneId ?? _scenes.first.id;
@@ -286,9 +298,13 @@ class MapController extends ChangeNotifier {
     isGM = false;
     viewedSceneId = null;
     viewedLayerId = null;
-    if (wasGm && code != null && isSynced) {
-      gmId = null;
-      await _releaseGm(code);
+    try {
+      if (wasGm && code != null && isSynced) {
+        gmId = null;
+        await _releaseGm(code);
+      }
+    } finally {
+      _claimingOrReleasing = false;
     }
     notifyListeners();
   }
@@ -403,6 +419,21 @@ class MapController extends ChangeNotifier {
   void _applyRemote(Map<String, dynamic>? row) {
     final first = !_receivedFirst;
     _receivedFirst = true;
+    // GM seat check runs first, before any early return (e.g. own-push echo).
+    if (row != null) {
+      final g = row['gm_id'];
+      final newGm = g == null ? null : readString(g, '');
+      if (isGM && isSynced && newGm != clientId && !_claimingOrReleasing) {
+        gmId = newGm;
+        isGM = false;
+        viewedSceneId = null;
+        viewedLayerId = null;
+        _stopGmHeartbeat();
+        _pushTimer?.cancel();
+        _pushTimer = null;
+        notifyListeners();
+      }
+    }
     if (row == null) {
       gmId = null;
       // No shared state yet: a GM seeds it with whatever they have locally.
@@ -413,12 +444,13 @@ class MapController extends ChangeNotifier {
     // now holds it, step down.
     final gm = row['gm_id'];
     gmId = gm == null ? null : readString(gm, '');
-    if (isGM && gmId != null && gmId != clientId) {
-      isGM = false;
-      viewedSceneId = null;
-      viewedLayerId = null;
-      _stopHeartbeat();
-    } else if (isSynced && gmId != null && gmId == clientId && !isGM) {
+    if (first &&
+        isSynced &&
+        gmId != null &&
+        gmId == clientId &&
+        !isGM &&
+        !_voluntarilyReleasedGm &&
+        !_claimingOrReleasing) {
       // Returning GM (e.g. app restart): resume the seat automatically.
       isGM = true;
       _restoreGmView();
@@ -506,6 +538,7 @@ class MapController extends ChangeNotifier {
     _pushTimer = null;
     final code = partyCode;
     if (code == null || !isSynced) return;
+    if (!isGM && !_claimingOrReleasing) return; // Demoted: never push.
     final stamp = DateTime.now().toUtc();
     _ownPushes.add(stamp.microsecondsSinceEpoch);
     if (_ownPushes.length > 64) _ownPushes.remove(_ownPushes.first);

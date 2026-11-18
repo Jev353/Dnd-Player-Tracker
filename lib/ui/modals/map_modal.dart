@@ -89,19 +89,6 @@ class _MapModalState extends State<MapModal> {
     }
   }
 
-  /// Fallback when the GM vanished: succeeds only if their seat is stale.
-  Future<void> _forceClaim() async {
-    final ok = await _map.requestGm(force: true);
-    if (!mounted) return;
-    _toast(
-      ok
-          ? 'You are now the GM.'
-          : (_map.syncError ??
-                'The current GM is still active (seat is only claimable '
-                    'after 2 minutes of inactivity).'),
-    );
-  }
-
   Future<void> _forceTakeover() async {
     final ok = await _map.forceRequestGm();
     if (!mounted) return;
@@ -282,12 +269,6 @@ class _MapModalState extends State<MapModal> {
                 ),
               ),
             ),
-            if (_map.gmTaken)
-              TextButton.icon(
-                onPressed: _forceClaim,
-                icon: const Icon(Icons.gavel),
-                label: const Text('Claim stale GM seat'),
-              ),
             if (_map.gmTaken &&
                 !_map.isGM &&
                 isDmCharacterName(_chars.active?.name))
