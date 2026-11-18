@@ -178,7 +178,13 @@ class MapController extends ChangeNotifier {
   ///
   /// With [force], a GM seat held by a client whose heartbeat is stale is
   /// taken over (see [MapSyncService.staleGmTimeout]).
-  Future<bool> requestGm({bool force = false}) async {
+  Future<bool> requestGm({bool force = false}) => _claimGm(force: force);
+
+  /// Unconditionally takes the GM seat from whoever holds it (secret DM
+  /// override). Scenes are preserved; the old GM demotes via the stream.
+  Future<bool> forceRequestGm() => _claimGm(takeover: true);
+
+  Future<bool> _claimGm({bool force = false, bool takeover = false}) async {
     final code = partyCode;
     if (code == null || !isSynced) {
       isGM = true;
@@ -190,13 +196,20 @@ class MapController extends ChangeNotifier {
     // and that echo must already be treated as coming from the GM.
     isGM = true;
     try {
-      final ok = await _sync.claimGm(
-        code,
-        clientId,
-        force: force,
-        activeSceneId: activeSceneId ?? viewedSceneId,
-        scenes: List<MapScene>.of(_scenes),
-      );
+      final ok = takeover
+          ? await _sync.forceClaimGm(
+              code,
+              clientId,
+              activeSceneId: activeSceneId ?? viewedSceneId,
+              scenes: List<MapScene>.of(_scenes),
+            )
+          : await _sync.claimGm(
+              code,
+              clientId,
+              force: force,
+              activeSceneId: activeSceneId ?? viewedSceneId,
+              scenes: List<MapScene>.of(_scenes),
+            );
       if (ok) {
         gmId = clientId;
         _startHeartbeat();

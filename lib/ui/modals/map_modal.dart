@@ -11,6 +11,9 @@ import 'dice_roller_dialog.dart';
 import 'map_dialogs.dart';
 import 'map_token_dialog.dart';
 
+/// True when [name] is the secret DM character name (case-insensitive).
+bool isDmCharacterName(String? name) => name?.trim().toUpperCase() == 'DM';
+
 /// Opens the Party Map as a ~90% viewport dialog.
 Future<void> showMapModal(
   BuildContext context, {
@@ -97,6 +100,12 @@ class _MapModalState extends State<MapModal> {
                 'The current GM is still active (seat is only claimable '
                     'after 2 minutes of inactivity).'),
     );
+  }
+
+  Future<void> _forceTakeover() async {
+    final ok = await _map.forceRequestGm();
+    if (!mounted) return;
+    _toast(ok ? 'You are now the GM.' : (_map.syncError ?? 'Takeover failed.'));
   }
 
   void _dropMyCharacter() {
@@ -278,6 +287,19 @@ class _MapModalState extends State<MapModal> {
                 onPressed: _forceClaim,
                 icon: const Icon(Icons.gavel),
                 label: const Text('Claim stale GM seat'),
+              ),
+            if (_map.gmTaken &&
+                !_map.isGM &&
+                isDmCharacterName(_chars.active?.name))
+              FilledButton.icon(
+                key: const ValueKey('force-takeover-dm'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.error,
+                  foregroundColor: Theme.of(context).colorScheme.onError,
+                ),
+                onPressed: _forceTakeover,
+                icon: const Icon(Icons.warning_amber),
+                label: const Text('Force Takeover DM'),
               ),
             OutlinedButton.icon(
               onPressed: () => showDiceRollerDialog(

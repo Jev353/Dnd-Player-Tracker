@@ -169,6 +169,33 @@ class MapSyncService {
     return updated.isNotEmpty;
   }
 
+  /// Unconditionally takes the GM seat, even from an active GM. Existing
+  /// scenes / ctive_scene_id are left untouched when a row exists.
+  Future<bool> forceClaimGm(
+    String partyCode,
+    String clientId, {
+    String? activeSceneId,
+    List<MapScene>? scenes,
+  }) async {
+    if (!isCloudSyncConfigured) return true;
+    final code = SyncService.normalizeRoom(partyCode);
+    final now = DateTime.now().toUtc().toIso8601String();
+    final updated = await _supabase
+        .from('party_maps')
+        .update({'gm_id': clientId, 'updated_at': now})
+        .eq('party_code', code)
+        .select();
+    if (updated.isNotEmpty) return true;
+    await _supabase.from('party_maps').upsert({
+      'party_code': code,
+      'gm_id': clientId,
+      'active_scene_id': activeSceneId,
+      'scenes': (scenes ?? const <MapScene>[]).map((s) => s.toJson()).toList(),
+      'updated_at': now,
+    });
+    return true;
+  }
+
   /// A GM seat is stale when its heartbeat is older than this.
   static const Duration staleGmTimeout = Duration(minutes: 2);
 

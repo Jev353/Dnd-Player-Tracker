@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:dnd_tracker/models/json_helpers.dart';
 import 'package:dnd_tracker/models/map_layer.dart';
@@ -6,6 +7,10 @@ import 'package:dnd_tracker/models/map_scene.dart';
 import 'package:dnd_tracker/models/map_token.dart';
 import 'package:dnd_tracker/services/map_sync_service.dart';
 import 'package:dnd_tracker/state/map_controller.dart';
+import 'package:dnd_tracker/services/storage_service.dart';
+import 'package:dnd_tracker/state/character_controller.dart';
+import 'package:dnd_tracker/ui/modals/map_modal.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Shared in-memory `party_maps` table.
@@ -97,6 +102,27 @@ class FakeMapSync extends MapSyncService {
     } else {
       return false;
     }
+    db.emit();
+    return true;
+  }
+
+  @override
+  Future<bool> forceClaimGm(
+    String partyCode,
+    String clientId, {
+    String? activeSceneId,
+    List<MapScene>? scenes,
+  }) async {
+    if (row == null) {
+      return claimGm(
+        partyCode,
+        clientId,
+        activeSceneId: activeSceneId,
+        scenes: scenes,
+      );
+    }
+    row!['gm_id'] = clientId;
+    row!['updated_at'] = DateTime.now().toUtc().toIso8601String();
     db.emit();
     return true;
   }
@@ -325,5 +351,122 @@ void main() {
     await settle();
     expect(mc.scenes.length, 1);
     expect(readList(fake.row!['scenes']).length, 1, reason: 'pushed');
+  });
+
+  test('forceRequestGm takes the seat from an active GM, keeps maps', () async {
+    final db = FakeDb();
+    final a = MapController(
+      syncService: FakeMapSync(db: db),
+      clientId: 'A',
+    );
+    final b = MapController(
+      syncService: FakeMapSync(db: db),
+      clientId: 'B',
+    );
+    a.setPartySession(partyCode: 'ABCD', isGM: false);
+    b.setPartySession(partyCode: 'ABCD', isGM: false);
+    await settle();
+    expect(await a.requestGm(), isTrue);
+    await settle();
+    a.addScene(MapScene(name: 'World'));
+    a.addLayer(MapLayer(name: 'Roof'));
+    a.addToken(MapToken(label: 'Orc', x: 1, y: 2));
+    a.setFogEnabled(true);
+    await settle();
+
+    expect(await b.requestGm(), isFalse);
+    expect(await b.forceRequestGm(), isTrue);
+    await settle();
+    expect(db.row!['gm_id'], 'B');
+    expect(b.isGM, isTrue);
+    expect(b.gmId, 'B');
+    expect(a.isGM, isFalse, reason: 'old GM demoted');
+    expect(a.gmTaken, isTrue);
+    for (final mc in [a, b]) {
+      expect(mc.scenes.length, 1);
+      expect(mc.activeScene!.layers.length, 1);
+      expect(mc.activeScene!.tokens.single.label, 'Orc');
+      expect(mc.activeScene!.fogEnabled, isTrue);
+    }
+    a.dispose();
+    b.dispose();
+  });
+
+  Future<void> openModal(
+    WidgetTester tester,
+    MapController mc,
+    CharacterController ctrl,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1800, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => showMapModal(
+                context,
+                mapController: mc,
+                characterController: ctrl,
+              ),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('Force Takeover DM only shows for a character named DM', (
+    tester,
+  ) async {
+    final dir = Directory.systemTemp.createTempSync('dnd_gm');
+    final ctrl = CharacterController(
+      StorageService(overrideDirectory: dir),
+      saveDelay: const Duration(milliseconds: 10),
+    );
+    await tester.runAsync(ctrl.load);
+    final db = FakeDb();
+    final a = MapController(
+      syncService: FakeMapSync(db: db),
+      clientId: 'A',
+    );
+    final mc = MapController(
+      syncService: FakeMapSync(db: db),
+      clientId: 'B',
+    );
+    await tester.runAsync(() async {
+      a.setPartySession(partyCode: 'ABCD', isGM: false);
+      mc.setPartySession(partyCode: 'ABCD', isGM: false);
+      await settle();
+      await a.requestGm();
+      await settle();
+    });
+    expect(mc.gmTaken, isTrue);
+    ctrl.mutate((c) => c.name = 'Aragorn');
+    ctrl.currentRoomCode = 'ABCD';
+
+    await openModal(tester, mc, ctrl);
+    final button = find.byKey(const ValueKey('force-takeover-dm'));
+    expect(button, findsNothing);
+
+    ctrl.mutate((c) => c.name = '  dm ');
+    await tester.pump();
+    expect(button, findsOneWidget);
+    expect(tester.widget<FilledButton>(button).onPressed, isNotNull);
+
+    ctrl.mutate((c) => c.name = 'Aragorn');
+    await tester.pump();
+    expect(button, findsNothing);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
+    a.dispose();
+    mc.dispose();
+    ctrl.dispose();
   });
 }

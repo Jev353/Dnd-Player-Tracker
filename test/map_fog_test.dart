@@ -152,10 +152,7 @@ void main() {
     expect(two, [...s.revealedRects, ...s.playerRevealedRects['char_2']!]);
     expect(two.any(s.playerRevealedRects['char_1']!.contains), isFalse);
     expect(s.revealedRectsFor(characterId: null, isGM: false), s.revealedRects);
-    expect(
-      s.revealedRectsFor(gmTargetCharacterId: 'char_1', isGM: true),
-      one,
-    );
+    expect(s.revealedRectsFor(gmTargetCharacterId: 'char_1', isGM: true), one);
     expect(s.revealedRectsFor(isGM: true), s.revealedRects);
 
     mc.setFogTargetCharacterId('char_1');
