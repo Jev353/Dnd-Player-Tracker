@@ -11,9 +11,17 @@ import 'widgets/top_action_bar.dart';
 
 /// Top bar plus a 40/30/30 three-column body for the single active character.
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key, required this.ctrl, this.mapController});
+  const DashboardScreen({
+    super.key,
+    required this.ctrl,
+    this.mapController,
+    this.clientId,
+  });
 
   final CharacterController ctrl;
+
+  /// Persistent client id passed to the private [MapController].
+  final String? clientId;
 
   /// Optional injection for tests; a private one is created otherwise.
   final MapController? mapController;
@@ -22,15 +30,23 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class _DashboardScreenState extends State<DashboardScreen>
+    with WidgetsBindingObserver {
   late final MapController _map =
-      widget.mapController ?? MapController(storage: StorageService());
+      widget.mapController ??
+      MapController(storage: StorageService(), clientId: widget.clientId);
 
   CharacterController get ctrl => widget.ctrl;
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.detached) _map.releaseGmOnExit();
+  }
+
+  @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     ctrl.addListener(_syncPartySession);
     WidgetsBinding.instance.addPostFrameCallback((_) => _syncPartySession());
   }
@@ -47,6 +63,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     ctrl.removeListener(_syncPartySession);
     if (widget.mapController == null) _map.dispose();
     super.dispose();

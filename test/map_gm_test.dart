@@ -68,9 +68,19 @@ class FakeMapSync extends MapSyncService {
   Future<bool> claimGm(
     String partyCode,
     String clientId, {
+    bool force = false,
     String? activeSceneId,
     List<MapScene>? scenes,
   }) async {
+    final holder = row?['gm_id'];
+    if (row != null && holder != null && holder != clientId) {
+      final stamp = DateTime.tryParse('${row!['updated_at']}');
+      if (!MapSyncService.isStale(stamp)) return false;
+      row!['gm_id'] = clientId;
+      row!['updated_at'] = DateTime.now().toUtc().toIso8601String();
+      db.emit();
+      return true;
+    }
     if (row == null) {
       row = {
         'party_code': partyCode,
@@ -234,6 +244,64 @@ void main() {
     await settle();
     expect(b.activeScene!.tokens.length, 2);
     expect(db.row!['gm_id'], 'B');
+  });
+
+  test('GM reconnects with same clientId after restart', () async {
+    final db = FakeDb();
+    final first = MapController(
+      syncService: FakeMapSync(db: db),
+      clientId: 'persistent-1',
+    );
+    first.setPartySession(partyCode: 'ABCD', isGM: false);
+    await settle();
+    expect(await first.requestGm(), isTrue);
+    await settle();
+    first.addScene(MapScene(name: 'World'));
+    await settle();
+    first.dispose(); // App closed without releasing the seat.
+
+    final second = MapController(
+      syncService: FakeMapSync(db: db, userId: 'different-anon-user'),
+      clientId: 'persistent-1',
+    );
+    second.setPartySession(partyCode: 'ABCD', isGM: false);
+    await settle();
+    expect(second.isGM, isTrue);
+    expect(second.gmTaken, isFalse);
+    expect(second.activeScene, isNotNull);
+    second.dispose();
+  });
+
+  test('stale GM seat can be taken over, fresh one cannot', () async {
+    final db = FakeDb();
+    final a = MapController(
+      syncService: FakeMapSync(db: db),
+      clientId: 'A',
+    );
+    final b = MapController(
+      syncService: FakeMapSync(db: db),
+      clientId: 'B',
+    );
+    a.setPartySession(partyCode: 'ABCD', isGM: false);
+    b.setPartySession(partyCode: 'ABCD', isGM: false);
+    await settle();
+    expect(await a.requestGm(), isTrue);
+    await settle();
+
+    expect(await b.requestGm(force: true), isFalse, reason: 'A is active');
+    expect(b.isGM, isFalse);
+
+    db.row!['updated_at'] = DateTime.now()
+        .toUtc()
+        .subtract(const Duration(minutes: 3))
+        .toIso8601String();
+    expect(await b.requestGm(force: true), isTrue);
+    await settle();
+    expect(db.row!['gm_id'], 'B');
+    expect(b.isGM, isTrue);
+    expect(a.isGM, isFalse);
+    a.dispose();
+    b.dispose();
   });
 
   test('empty remote row does not wipe local scenes', () async {

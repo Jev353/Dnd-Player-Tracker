@@ -25,15 +25,25 @@ Future<void> main() async {
       debugPrint('Cloud sync unavailable: $e');
     }
   }
-  final controller = CharacterController(StorageService());
+  final storage = StorageService();
+  final controller = CharacterController(storage);
   await controller.load();
-  runApp(DnDTrackerApp(controller: controller));
+  String? clientId;
+  try {
+    clientId = await storage.loadOrCreateClientId();
+  } catch (e) {
+    debugPrint('Could not load persistent clientId: $e');
+  }
+  runApp(DnDTrackerApp(controller: controller, clientId: clientId));
 }
 
 class DnDTrackerApp extends StatelessWidget {
-  const DnDTrackerApp({super.key, required this.controller});
+  const DnDTrackerApp({super.key, required this.controller, this.clientId});
 
   final CharacterController controller;
+
+  /// Persistent id so a returning GM reclaims their seat after a restart.
+  final String? clientId;
 
   @override
   Widget build(BuildContext context) {
@@ -41,7 +51,7 @@ class DnDTrackerApp extends StatelessWidget {
       title: 'D&D Player Tracker',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
-      home: DashboardScreen(ctrl: controller),
+      home: DashboardScreen(ctrl: controller, clientId: clientId),
     );
   }
 }

@@ -20,8 +20,42 @@ class MapController extends ChangeNotifier {
     MapSyncService? syncService,
     this.dragPushInterval = const Duration(milliseconds: 100),
     StorageService? storage,
+    String? clientId,
   }) : _sync = syncService ?? MapSyncService(),
-       _storage = storage;
+       _storage = storage,
+       _persistentClientId = clientId;
+
+  final String? _persistentClientId;
+
+  /// How often an active GM refreshes `updated_at` so the seat isn't stale.
+  static const Duration heartbeatInterval = Duration(seconds: 45);
+  Timer? _heartbeatTimer;
+
+  void _startHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+    if (!isGM || !isSynced || _disposed) return;
+    _heartbeatTimer = Timer.periodic(heartbeatInterval, (_) {
+      final code = partyCode;
+      if (!isGM || code == null || !isSynced) return;
+      final stamp = DateTime.now().toUtc();
+      _ownPushes.add(stamp.microsecondsSinceEpoch); // Ignore our own echo.
+      if (_ownPushes.length > 64) _ownPushes.remove(_ownPushes.first);
+      _sync.touchGmHeartbeat(code, clientId, updatedAt: stamp).catchError((
+        Object e,
+      ) {
+        debugPrint('heartbeat failed: $e');
+      });
+    });
+  }
+
+  void _stopHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+  }
+
+  /// Best-effort release for app termination.
+  void releaseGmOnExit() => _releaseGmQuietly();
 
   final StorageService? _storage;
 
@@ -111,7 +145,8 @@ class MapController extends ChangeNotifier {
   final String _fallbackClientId = newId();
 
   /// Stable id for this client: the Supabase user id when available.
-  String get clientId => _sync.currentUserId ?? _fallbackClientId;
+  String get clientId =>
+      _persistentClientId ?? _sync.currentUserId ?? _fallbackClientId;
 
   /// True when someone other than this client holds the GM seat.
   bool get gmTaken => isSynced && gmId != null && gmId != clientId;
@@ -122,6 +157,7 @@ class MapController extends ChangeNotifier {
     final changed = this.partyCode != partyCode;
     if (changed) {
       _releaseGmQuietly();
+      _stopHeartbeat();
       gmId = null;
     }
     this.partyCode = partyCode;
@@ -139,7 +175,10 @@ class MapController extends ChangeNotifier {
 
   /// Tries to become GM. Local (unsynced) sessions always succeed; in a
   /// synced party this fails if another player already holds the seat.
-  Future<bool> requestGm() async {
+  ///
+  /// With [force], a GM seat held by a client whose heartbeat is stale is
+  /// taken over (see [MapSyncService.staleGmTimeout]).
+  Future<bool> requestGm({bool force = false}) async {
     final code = partyCode;
     if (code == null || !isSynced) {
       isGM = true;
@@ -154,11 +193,13 @@ class MapController extends ChangeNotifier {
       final ok = await _sync.claimGm(
         code,
         clientId,
+        force: force,
         activeSceneId: activeSceneId ?? viewedSceneId,
         scenes: List<MapScene>.of(_scenes),
       );
       if (ok) {
         gmId = clientId;
+        _startHeartbeat();
         syncError = null;
         final remote = await _sync.fetchPartyMap(code);
         if (remote != null) {
@@ -220,6 +261,7 @@ class MapController extends ChangeNotifier {
   Future<void> releaseGm() async {
     final code = partyCode;
     final wasGm = isGM;
+    _stopHeartbeat();
     if (wasGm && activeSceneId == null && _scenes.isNotEmpty) {
       activeSceneId = viewedSceneId ?? _scenes.first.id;
     }
@@ -362,6 +404,12 @@ class MapController extends ChangeNotifier {
       isGM = false;
       viewedSceneId = null;
       viewedLayerId = null;
+      _stopHeartbeat();
+    } else if (isSynced && gmId != null && gmId == clientId && !isGM) {
+      // Returning GM (e.g. app restart): resume the seat automatically.
+      isGM = true;
+      _restoreGmView();
+      _startHeartbeat();
     }
     // Claiming GM creates an empty row. A GM never deletes every scene, so an
     // empty remote list means "not uploaded yet": keep ours and upload it
@@ -533,6 +581,7 @@ class MapController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _stopHeartbeat();
     _pushTimer?.cancel();
     _sub?.cancel();
     for (final timer in _toastTimers) {

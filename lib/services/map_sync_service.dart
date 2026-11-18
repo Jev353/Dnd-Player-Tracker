@@ -107,9 +107,15 @@ class MapSyncService {
   /// Tries to become the party's GM. Returns true if [clientId] now holds
   /// the role (including when it already did), false if someone else does.
   /// Requires the `gm_id text` column on `party_maps`.
+  ///
+  /// A seat held by another client is only taken over when its `updated_at`
+  /// heartbeat is older than [staleGmTimeout] (a GM who crashed or vanished).
+  /// [force] is the explicit "claim stale seat" request; it still requires
+  /// staleness so an active GM can't be hijacked.
   Future<bool> claimGm(
     String partyCode,
     String clientId, {
+    bool force = false,
     String? activeSceneId,
     List<MapScene>? scenes,
   }) async {
@@ -118,7 +124,7 @@ class MapSyncService {
     final now = DateTime.now().toUtc().toIso8601String();
     final row = await _supabase
         .from('party_maps')
-        .select('gm_id')
+        .select('gm_id, updated_at')
         .eq('party_code', code)
         .maybeSingle();
     if (row == null) {
@@ -140,7 +146,19 @@ class MapSyncService {
     }
     final current = row['gm_id'];
     if (current == clientId) return true;
-    if (current != null) return false;
+    if (current != null) {
+      final stamp = DateTime.tryParse(readString(row['updated_at'], ''));
+      if (!isStale(stamp)) return false;
+      // Conditional update: only succeeds if the seat is still held by the
+      // same stale GM.
+      final taken = await _supabase
+          .from('party_maps')
+          .update({'gm_id': clientId, 'updated_at': now})
+          .eq('party_code', code)
+          .eq('gm_id', current)
+          .select();
+      return taken.isNotEmpty;
+    }
     // Conditional update: only succeeds while the seat is still empty.
     final updated = await _supabase
         .from('party_maps')
@@ -149,6 +167,31 @@ class MapSyncService {
         .isFilter('gm_id', null)
         .select();
     return updated.isNotEmpty;
+  }
+
+  /// A GM seat is stale when its heartbeat is older than this.
+  static const Duration staleGmTimeout = Duration(minutes: 2);
+
+  /// True if [updatedAt] is missing or older than [staleGmTimeout].
+  static bool isStale(DateTime? updatedAt, {DateTime? now}) =>
+      updatedAt == null ||
+      (now ?? DateTime.now().toUtc()).difference(updatedAt.toUtc()) >
+          staleGmTimeout;
+
+  /// Refreshes `updated_at` so an active GM's seat is never stale.
+  Future<void> touchGmHeartbeat(
+    String partyCode,
+    String clientId, {
+    DateTime? updatedAt,
+  }) async {
+    if (!isCloudSyncConfigured) return;
+    await _supabase
+        .from('party_maps')
+        .update({
+          'updated_at': (updatedAt ?? DateTime.now()).toUtc().toIso8601String(),
+        })
+        .eq('party_code', SyncService.normalizeRoom(partyCode))
+        .eq('gm_id', clientId);
   }
 
   /// Gives up the GM role, but only if [clientId] actually holds it.

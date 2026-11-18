@@ -1,9 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:path_provider/path_provider.dart';
 
 import '../models/character.dart';
+import '../models/json_helpers.dart';
 
 /// Local file I/O for character JSON files. One character = one .json file.
 class StorageService {
@@ -28,6 +30,26 @@ class StorageService {
     if (!await dir.exists()) await dir.create(recursive: true);
     _dir = dir;
     return dir;
+  }
+
+  /// Loads the persistent client id (`client_id.txt` in the DnDPlayerTracker
+  /// folder), creating and saving a new one on first run.
+  Future<String> loadOrCreateClientId() async {
+    final chars = await charactersDir;
+    final base = _overrideDirectory != null ? chars : chars.parent;
+    final file = File('${base.path}${Platform.pathSeparator}client_id.txt');
+    try {
+      if (await file.exists()) {
+        final existing = (await file.readAsString()).trim();
+        if (existing.isNotEmpty) return existing;
+      }
+    } catch (_) {}
+    final rnd = Random.secure().nextInt(1 << 32).toRadixString(16);
+    final id = '${newId()}-$rnd';
+    try {
+      await file.writeAsString(id, flush: true);
+    } catch (_) {}
+    return id;
   }
 
   String _safeId(String id) => id.replaceAll(RegExp(r'[^A-Za-z0-9_\-]'), '_');
