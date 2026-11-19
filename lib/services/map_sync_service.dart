@@ -7,6 +7,7 @@ import '../main.dart' show isCloudSyncConfigured;
 import '../models/dice_roll_event.dart';
 import '../models/json_helpers.dart';
 import '../models/map_scene.dart';
+import '../models/map_token.dart';
 import 'sync_service.dart';
 
 /// Pushes/pulls the shared party map via Supabase. No-ops when not configured.
@@ -73,6 +74,112 @@ class MapSyncService {
       'scenes': scenes.map((s) => s.toJson()).toList(),
       'updated_at': (updatedAt ?? DateTime.now()).toUtc().toIso8601String(),
     });
+  }
+
+  /// True once the atomic token functions proved absent from the database
+  /// (see supabase/migrations/20261118_atomic_map_tokens.sql).
+  bool _rpcMissing = false;
+
+  static bool _isMissingFunction(PostgrestException e) =>
+      e.code == 'PGRST202' || e.code == '42883';
+
+  /// Adds or replaces a single token (by id) in scene [sceneId] without
+  /// touching any other token: reads the latest row, merges, writes back.
+  Future<void> upsertToken(
+    String partyCode,
+    String sceneId,
+    MapToken token,
+  ) async {
+    if (isCloudSyncConfigured && !_rpcMissing) {
+      try {
+        await _supabase.rpc(
+          'upsert_map_token',
+          params: {
+            'p_party_code': SyncService.normalizeRoom(partyCode),
+            'p_scene_id': sceneId,
+            'p_token': token.toJson(),
+          },
+        );
+        return;
+      } on PostgrestException catch (e) {
+        if (!_isMissingFunction(e)) rethrow;
+        _rpcMissing = true; // Migration not applied: use the fallback below.
+      }
+    }
+    // Fallback: the party map is one JSON document, so concurrent read-modify-write
+    // cycles can clobber each other. Verify after writing and retry if our
+    // token was lost to a racing writer.
+    for (var attempt = 0; attempt < 4; attempt++) {
+      final row = await fetchPartyMap(partyCode);
+      if (row == null) return;
+      final scenes = readList(
+        row['scenes'],
+      ).map((s) => MapScene.fromJson(readMap(s))).toList();
+      final i = scenes.indexWhere((s) => s.id == sceneId);
+      if (i < 0) return;
+      final tokens = [...scenes[i].tokens];
+      final t = tokens.indexWhere((x) => x.id == token.id);
+      if (t < 0) {
+        tokens.add(token);
+      } else {
+        tokens[t] = token;
+      }
+      scenes[i] = scenes[i].copyWith(tokens: tokens);
+      final active = row['active_scene_id'];
+      await pushPartyMapState(
+        partyCode,
+        active == null ? null : readString(active, ''),
+        scenes,
+      );
+      final check = await fetchPartyMap(partyCode);
+      if (check == null) return;
+      final stored = readList(check['scenes'])
+          .map((s) => MapScene.fromJson(readMap(s)))
+          .where((s) => s.id == sceneId)
+          .expand((s) => s.tokens);
+      if (stored.any((x) => x.id == token.id)) return;
+    }
+  }
+
+  /// Removes a single token (by id) from scene [sceneId], leaving every
+  /// other token in the latest stored row untouched.
+  Future<void> removeTokenById(
+    String partyCode,
+    String sceneId,
+    String tokenId,
+  ) async {
+    if (isCloudSyncConfigured && !_rpcMissing) {
+      try {
+        await _supabase.rpc(
+          'remove_map_token',
+          params: {
+            'p_party_code': SyncService.normalizeRoom(partyCode),
+            'p_scene_id': sceneId,
+            'p_token_id': tokenId,
+          },
+        );
+        return;
+      } on PostgrestException catch (e) {
+        if (!_isMissingFunction(e)) rethrow;
+        _rpcMissing = true;
+      }
+    }
+    final row = await fetchPartyMap(partyCode);
+    if (row == null) return;
+    final scenes = readList(
+      row['scenes'],
+    ).map((s) => MapScene.fromJson(readMap(s))).toList();
+    final i = scenes.indexWhere((s) => s.id == sceneId);
+    if (i < 0) return;
+    scenes[i] = scenes[i].copyWith(
+      tokens: scenes[i].tokens.where((t) => t.id != tokenId).toList(),
+    );
+    final active = row['active_scene_id'];
+    await pushPartyMapState(
+      partyCode,
+      active == null ? null : readString(active, ''),
+      scenes,
+    );
   }
 
   /// Emits the party's map row (or null while none exists yet) on every

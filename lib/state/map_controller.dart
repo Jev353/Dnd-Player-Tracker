@@ -484,7 +484,7 @@ class MapController extends ChangeNotifier {
         ? null
         : readString(remoteActive, '');
 
-    final merged = _keepDraggedToken(incoming);
+    final merged = _mergePendingTokens(_keepDraggedToken(incoming));
     _scenes
       ..clear()
       ..addAll(merged);
@@ -526,6 +526,94 @@ class MapController extends ChangeNotifier {
     ];
   }
 
+  /// Locally added/changed tokens not yet confirmed written: id -> (sceneId,
+  /// token). Remote updates are merged with these so they never vanish.
+  final Map<String, (String, MapToken)> _pendingTokens = {};
+  Timer? _tokenPatchTimer;
+
+  List<MapScene> _mergePendingTokens(List<MapScene> incoming) {
+    if (_pendingTokens.isEmpty) return incoming;
+    // Confirmed once a remote row contains the token; otherwise another
+    // writer clobbered it (concurrent read-modify-write), so re-assert it.
+    final seen = <String>{
+      for (final s in incoming)
+        for (final t in s.tokens) t.id,
+    };
+    _pendingTokens.removeWhere((id, _) => seen.contains(id));
+    for (final id in _pendingTokens.keys.toList()) {
+      scheduleMicrotask(() {
+        if (_pendingTokens.containsKey(id) && !_disposed) _pushTokenPatch(id);
+      });
+    }
+    if (_pendingTokens.isEmpty) return incoming;
+    return [
+      for (final s in incoming)
+        () {
+          final extra = [
+            for (final e in _pendingTokens.values)
+              if (e.$1 == s.id && !s.tokens.any((t) => t.id == e.$2.id)) e.$2,
+          ];
+          return extra.isEmpty
+              ? s
+              : s.copyWith(tokens: [...s.tokens, ...extra]);
+        }(),
+    ];
+  }
+
+  void _scheduleTokenPatch(String tokenId) {
+    if (!isSynced) return;
+    _tokenPatchTimer ??= Timer(dragPushInterval, () {
+      _tokenPatchTimer = null;
+      _pushTokenPatch(tokenId);
+    });
+  }
+
+  /// Writes only token [tokenId] (merged by id into the latest remote row).
+  /// Allowed for players too: permission is enforced by the callers.
+  Future<void> _pushTokenPatch(String tokenId) {
+    final code = partyCode;
+    final scene = activeScene;
+    if (code == null || !isSynced || scene == null) return Future.value();
+    final sceneId = scene.id;
+    return _enqueue(() => _pushTokenPatchImpl(code, sceneId, tokenId));
+  }
+
+  Future<void> _pushTokenPatchImpl(
+    String code,
+    String sceneId,
+    String tokenId,
+  ) async {
+    final scene = _sceneById(sceneId);
+    if (scene == null) return;
+    final token = _findToken(scene, tokenId); // Latest local version.
+    if (token == null) return;
+    try {
+      await _sync.upsertToken(code, scene.id, token);
+      if (syncError != null) {
+        syncError = null;
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('upsertToken failed: $e');
+      syncError = e.toString();
+      notifyListeners();
+    }
+  }
+
+  Future<void> _pushTokenRemoval(String sceneId, String tokenId) {
+    final code = partyCode;
+    if (code == null || !isSynced) return Future.value();
+    return _enqueue(() async {
+      try {
+        await _sync.removeTokenById(code, sceneId, tokenId);
+      } catch (e) {
+        debugPrint('removeTokenById failed: $e');
+        syncError = e.toString();
+        notifyListeners();
+      }
+    });
+  }
+
   /// Throttled push used while dragging: at most one per [dragPushInterval],
   /// always carrying the latest state.
   void _schedulePush() {
@@ -533,9 +621,25 @@ class MapController extends ChangeNotifier {
     _pushTimer ??= Timer(dragPushInterval, _pushNow);
   }
 
-  Future<void> _pushNow() async {
+  Future<void> _writeChain = Future<void>.value();
+
+  /// Runs [op] after every previously queued write so full pushes and
+  /// per-token patches never interleave (no lost updates).
+  Future<void> _enqueue(Future<void> Function() op) {
+    final next = _writeChain.then((_) => op()).catchError((Object e) {
+      debugPrint('map write failed: $e');
+    });
+    _writeChain = next;
+    return next;
+  }
+
+  Future<void> _pushNow() {
     _pushTimer?.cancel();
     _pushTimer = null;
+    return _enqueue(_pushNowImpl);
+  }
+
+  Future<void> _pushNowImpl() async {
     final code = partyCode;
     if (code == null || !isSynced) return;
     if (!isGM && !_claimingOrReleasing) return; // Demoted: never push.
@@ -868,7 +972,8 @@ class MapController extends ChangeNotifier {
       if (scene.tokens.any((t) => t.characterId == own)) return;
     }
     _replaceActive(scene.copyWith(tokens: [...scene.tokens, token]));
-    _pushNow();
+    _pendingTokens[token.id] = (scene.id, token);
+    _pushTokenPatch(token.id);
   }
 
   /// Marks [tokenId] as being dragged locally so remote updates leave it
@@ -884,8 +989,11 @@ class MapController extends ChangeNotifier {
   /// Ends a drag and immediately pushes the final position.
   void endTokenDrag() {
     if (_draggingTokenId == null) return;
+    final id = _draggingTokenId!;
     _draggingTokenId = null;
-    _pushNow();
+    _tokenPatchTimer?.cancel();
+    _tokenPatchTimer = null;
+    _pushTokenPatch(id);
   }
 
   bool _canMove(MapToken token, String? currentCharacterId) =>
@@ -904,8 +1012,12 @@ class MapController extends ChangeNotifier {
     if (scene == null) return;
     final token = _findToken(scene, tokenId);
     if (token == null || !_canMove(token, currentCharacterId)) return;
-    _updateToken(scene, token.copyWith(x: newX, y: newY));
-    _schedulePush();
+    final moved = token.copyWith(x: newX, y: newY);
+    _updateToken(scene, moved);
+    if (_pendingTokens.containsKey(tokenId)) {
+      _pendingTokens[tokenId] = (scene.id, moved);
+    }
+    _scheduleTokenPatch(tokenId);
   }
 
   /// Moves a token by ([dx], [dy]) from its CURRENT position. Use this while
@@ -971,7 +1083,8 @@ class MapController extends ChangeNotifier {
         tokens: scene.tokens.where((t) => t.id != tokenId).toList(),
       ),
     );
-    _pushNow();
+    _pendingTokens.remove(tokenId);
+    _pushTokenRemoval(scene.id, tokenId);
   }
 
   MapToken? _findToken(MapScene scene, String tokenId) {

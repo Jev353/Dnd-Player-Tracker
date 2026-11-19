@@ -299,6 +299,46 @@ void main() {
     expect(b.activeScene!.tokens.length, 2);
     expect(db.row!['gm_id'], 'B');
   });
+  test('player-added token survives DM moving another token', () async {
+    final db = FakeDb();
+    final dm = MapController(syncService: FakeMapSync(db: db, userId: 'DM'));
+    final player = MapController(
+      syncService: FakeMapSync(db: db, userId: 'P1'),
+    );
+    dm.setPartySession(partyCode: 'ABCD', isGM: false);
+    player.setPartySession(partyCode: 'ABCD', isGM: false);
+    await settle();
+    await dm.requestGm();
+    await settle();
+    dm.addScene(MapScene(name: 'World'));
+    final goblin = MapToken(label: 'Goblin', x: 10, y: 20);
+    dm.addToken(goblin);
+    await settle();
+    expect(player.activeScene!.tokens.length, 1);
+
+    // Player adds their character; DM has not seen it yet.
+    final hero = MapToken(characterId: 'c1', label: 'Hero', x: 50, y: 60);
+    player.addToken(hero, currentCharacterId: 'c1');
+    // DM moves the goblin from stale state (before the echo is processed).
+    dm.beginTokenDrag(goblin.id, currentCharacterId: null);
+    dm.moveToken(goblin.id, 30, 40, currentCharacterId: null);
+    dm.endTokenDrag();
+    await settle();
+    await settle();
+
+    for (final c in [dm, player]) {
+      final tokens = c.activeScene!.tokens;
+      expect(tokens.length, 2, reason: 'both tokens present');
+      final g = tokens.firstWhere((t) => t.id == goblin.id);
+      final h = tokens.firstWhere((t) => t.id == hero.id);
+      expect((g.x, g.y), (30.0, 40.0));
+      expect((h.x, h.y), (50.0, 60.0));
+    }
+    final stored = readList(db.row!['scenes']).first;
+    expect(readList(readMap(stored)['tokens']).length, 2);
+  });
+
+
 
   test('GM reconnects with same clientId after restart', () async {
     final db = FakeDb();
